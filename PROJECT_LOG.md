@@ -19,7 +19,7 @@
 
 | Phase | Mô tả                              | Trạng thái |
 |-------|------------------------------------|------------|
-| 1     | Wazuh AIO trên VPS                 | TODO       |
+| 1     | Wazuh AIO trên VPS                 | **DONE**   |
 | 2     | Ubuntu endpoint + auditd           | TODO       |
 | 3     | Windows endpoint + Sysmon          | TODO       |
 | 4     | 10 detection rules MITRE ATT&CK    | TODO       |
@@ -28,7 +28,11 @@
 
 ## Thông tin hạ tầng
 
-- **VPS**: Ubuntu 22.04, ≥4GB RAM, 2 vCPU, 50GB — IP: `TODO`, SSH user: `TODO`
+- **VPS**: Ubuntu **24.04**, 7.8GB RAM, 4 vCPU, 158GB — IP: `43.228.215.234`, SSH user: `namth`
+  - Wazuh Dashboard: `https://43.228.215.234` (admin / password lưu tại `.secrets.local`)
+  - Wazuh API: `https://43.228.215.234:55000` (user `wazuh`)
+  - Ports: 443, 1514, 1515, 55000 (đã UFW allow)
+  - **CẢNH BÁO**: đã `docker stop traefik` để nhường port 443. Restart policy `always` → nếu reboot VPS, traefik sẽ tự lên và cướp 443. Sau khi lab xong: `docker stop wazuh-*` và `docker start traefik` để khôi phục.
 - **Windows endpoint**: VMware, Win 10/11 — hostname: `TODO`, IP LAN: `TODO`
 - **Linux endpoint**: VMware, Ubuntu 22.04 — hostname: `TODO`, IP LAN: `TODO`
 - **Kali host**: repo tại `/home/kali/blue-team-lab`
@@ -47,3 +51,13 @@
 - what: init repo, tạo cấu trúc thư mục, README, PROJECT_LOG, .gitignore
 - result: ok
 - next: Phase 1 — deploy Wazuh AIO trên VPS (docs/01-wazuh-server-setup.md)
+
+## 2026-07-09 15:13 | claude | vps | phase1
+- what: recon VPS (Ubuntu 24.04, 7.8G RAM, đã có Traefik + 6 Docker apps giữ 443/80/3000)
+- result: phát hiện conflict → docker stop traefik (không rm), thêm UFW rules 1514/1515/55000
+- next: chạy wazuh-install.sh
+
+## 2026-07-09 15:14–15:19 | claude | vps | phase1
+- what: chạy `sudo bash wazuh-install.sh -a -i` (flag -i vì Ubuntu 24.04 ngoài support matrix chính thức)
+- result: ok — 4 service active (wazuh-manager, wazuh-indexer, wazuh-dashboard, filebeat); Dashboard trả 302 tại :443; API :55000 auth ok (JWT)
+- next: Phase 2 — enroll Ubuntu VMware endpoint
