@@ -20,7 +20,7 @@
 | Phase | Mô tả                              | Trạng thái |
 |-------|------------------------------------|------------|
 | 1     | Wazuh AIO trên VPS                 | **DONE**   |
-| 2     | Ubuntu endpoint + auditd           | TODO       |
+| 2     | Ubuntu endpoint + auditd           | **DONE**   |
 | 3     | Windows endpoint + Sysmon          | TODO       |
 | 4     | 10 detection rules MITRE ATT&CK    | TODO       |
 | 5     | Python enrichment (VT + AbuseIPDB) | TODO       |
@@ -34,7 +34,7 @@
   - Ports: 443, 1514, 1515, 55000 (đã UFW allow)
   - **CẢNH BÁO**: đã `docker stop traefik` để nhường port 443. Restart policy `always` → nếu reboot VPS, traefik sẽ tự lên và cướp 443. Sau khi lab xong: `docker stop wazuh-*` và `docker start traefik` để khôi phục.
 - **Windows endpoint**: VMware, Win 10/11 — hostname: `TODO`, IP LAN: `TODO`
-- **Linux endpoint**: VMware, Ubuntu 22.04 — hostname: `TODO`, IP LAN: `TODO`
+- **Linux endpoint**: VMware, Ubuntu 22.04.5 — hostname: `linux-ep-01`, IP LAN: `192.168.154.166`, user: `gnid`, agent 4.9.2 active
 - **Kali host**: repo tại `/home/kali/blue-team-lab`
 
 ## Convention
@@ -56,6 +56,15 @@
 - what: recon VPS (Ubuntu 24.04, 7.8G RAM, đã có Traefik + 6 Docker apps giữ 443/80/3000)
 - result: phát hiện conflict → docker stop traefik (không rm), thêm UFW rules 1514/1515/55000
 - next: chạy wazuh-install.sh
+
+## 2026-07-09 16:15 | claude | linux-ep | phase2
+- what: scp wazuh-audit.rules → /etc/audit/rules.d/wazuh.rules, augenrules --load
+- result: ok — 26 rule active trong kernel (auditctl -l), audit.log ghi bình thường (3013 SYSCALL sau 5 phút)
+
+## 2026-07-09 16:22 | claude | linux-ep | phase2
+- what: chèn <localfile> audit block vào /var/ossec/etc/ossec.conf, restart wazuh-agent
+- result: ok — logcollector đang tail /var/log/audit/audit.log; Manager nhận 310+ alert (level 3 "sudo to ROOT"). Custom rule sẽ có ở Phase 4.
+- next: Phase 3 — Windows endpoint + Sysmon
 
 ## 2026-07-09 15:14–15:19 | claude | vps | phase1
 - what: chạy `sudo bash wazuh-install.sh -a -i` (flag -i vì Ubuntu 24.04 ngoài support matrix chính thức)
