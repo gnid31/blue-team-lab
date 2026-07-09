@@ -1,0 +1,27 @@
+# Secrets
+.env
+*.env
+enrichment/config.local.*
+**/agent-auth-key*
+**/*.pem
+**/*.key
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Local data
+enrichment/cache/
+enrichment/output/
+hunting-reports/**/raw-alerts/
