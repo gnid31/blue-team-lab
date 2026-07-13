@@ -124,3 +124,9 @@
 - what: setup SSH Kali→Win qua labuser + key ed25519, chuyển toàn bộ Phase 6 sang autonomous (không cần Gemini relay). Rule 100101 debug + fix (dùng if_group=sysmon_event1 + field originalFileName + commandLine regex thay vì if_sid=61603 + image path). Trigger T1059.001 mimic (EncodedCommand + w hidden + ExecutionPolicy Bypass) trực tiếp qua SSH.
 - result: **rule 100101 fire 2 alerts level 12 T1059.001** đúng thiết kế. Timeline reconstruct hoàn chỉnh (SSH login → sshd-session.exe → powershell.exe). Enrichment: 10 verdict VT, tất cả clean (hash powershell.exe hợp pháp — điểm bài học "behavior > IOC"). Report: hunting-reports/session-01-T1059.001.md
 - next: session 2 T1547.001 Registry Run Key
+
+## 2026-07-13 14:09 | claude | kali+win-ep | phase6-session-02-COMPLETE
+- what: T1547.001 Registry Run Key persistence — reg add HKCU\...\Run\BTLab_v6=cmd.exe/c calc.exe qua SSH. Rule 100108 debug: `if_sid=61615` + backslash regex không fire; `if_group=sysmon_event_13` không fire; final fix `if_sid=92302` (chain từ built-in reg.exe rule) — works.
+- result: rule 100108 fire 1 alert level 12 T1547.001, targetObject=HKU\<SID>\...\Run\BTLab_v6, image=reg.exe, TTD ~1s.
+- gap: rule chỉ bắt khi attacker dùng reg.exe (chain 92302). Powershell/regedit/wmic sẽ miss — cần rule 100118 supplemental.
+- next: session 03 T1053.005 Scheduled Task
