@@ -18,11 +18,25 @@
   <rule id="100100" level="12">
     <if_sid>80700</if_sid>
     <field name="audit.key">^credential_read$</field>
-    <description>T1003.008 - Read of /etc/shadow by $(audit.exe) [uid=$(audit.uid), auid=$(audit.auid)]</description>
+    <!-- Whitelist system components that legitimately read /etc/shadow.
+         See hunting-reports/session-05-T1003.008.md §4.4 for FP data (7/8 alerts filtered). -->
+    <field name="audit.exe" negate="yes" type="pcre2">^/usr/(sbin/(sshd|nologin)|bin/(sudo|su|passwd|chpasswd|useradd|usermod|newusers|chsh|chfn|login|unix_chkpwd)|lib/systemd/systemd(-[a-z]+)?)$</field>
+    <description>T1003.008 - Suspicious read of /etc/shadow by $(audit.exe) [uid=$(audit.uid), auid=$(audit.auid)]</description>
     <mitre>
       <id>T1003.008</id>
     </mitre>
     <group>credential_access,pci_dss_10.2.5,gdpr_IV_35.7.d,</group>
+  </rule>
+
+  <!-- Sub-rule: escalate khi shadow được đọc bởi attacker common tool -->
+  <rule id="100120" level="14">
+    <if_sid>100100</if_sid>
+    <field name="audit.exe" type="pcre2">/(cat|less|more|head|tail|dd|cp|hexdump|xxd|strings|awk|grep|sed)$</field>
+    <description>T1003.008 - CRITICAL: /etc/shadow read by attacker-style tool $(audit.exe) [auid=$(audit.auid)]</description>
+    <mitre>
+      <id>T1003.008</id>
+    </mitre>
+    <group>credential_access,</group>
   </rule>
 
   <!-- =========================================================

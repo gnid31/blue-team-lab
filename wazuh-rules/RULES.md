@@ -10,24 +10,41 @@ Mỗi rule dưới đây có: **logic**, **data source**, **level**, **false-pos
 
 - **Data source**: auditd, key `credential_read`
 - **Prereq**: audit rule `-w /etc/shadow -p rwa -k credential_read` (đã có trong `auditd/wazuh-audit.rules`)
-- **Level**: 12 (critical)
+- **Level**: 12 (critical) — hoặc **14** khi rule con `100120` escalate (attacker tool)
 - **Parent SID**: 80700
 
 **Logic**:
-Bất cứ syscall (`openat`, `read`) nào chạm `/etc/shadow` đều bắn audit event với `key=credential_read`. Rule match key này.
+Bất cứ syscall (`openat`, `read`) nào chạm `/etc/shadow` bắn audit event với `key=credential_read`. Rule match key này **VÀ** loại trừ system component hợp lệ (sshd, sudo, systemd, passwd, ...).
 
-**False-positive profile**:
-- User root chạy `passwd`, `chpasswd`, `useradd`, `usermod` — hợp lệ nhưng vẫn trigger. Whitelist theo `audit.exe`:
-  ```xml
-  <field name="audit.exe" negate="yes" type="pcre2">/(passwd|chpasswd|useradd|usermod|newusers)$</field>
-  ```
-- Backup tool (`rsync`, `tar`) khi backup toàn hệ thống. Whitelist theo `audit.auid` = uid của service account backup.
-- PAM authenticator daemon (rare). Kiểm tra `audit.exe` = `/usr/sbin/sshd`, `/usr/bin/su`.
+**Sub-rule 100120** (level 14): escalate nếu `audit.exe` là attacker-style tool (`cat`, `less`, `head`, `dd`, `xxd`, `strings`, `awk`, `grep`, `sed`) — đọc shadow bằng những tool này = confirmed T1003.008.
+
+**False-positive profile** (real data từ Session 05):
+
+Trong test session, **8 alert** fire cho 1 command `sudo cat /etc/shadow`:
+- 3× `/usr/sbin/sshd` (SSH auth flow, pre + post + session)
+- 2× `/usr/lib/systemd/systemd` (user session init)
+- 2× `/usr/bin/sudo` (password validation trước khi execute)
+- 1× `/usr/bin/cat` ← **only true positive**
+
+→ **FP rate 87.5%** nếu không whitelist.
+
+**Whitelist đã apply trong rule** (regex negate):
+```
+^/usr/(sbin/(sshd|nologin)|bin/(sudo|su|passwd|chpasswd|useradd|usermod|newusers|chsh|chfn|login|unix_chkpwd)|lib/systemd/systemd(-[a-z]+)?)$
+```
+
+Sau whitelist: **1 alert level 14 chính xác** (rule 100120 fire trên cat).
+
+**Sau khi apply whitelist, FP còn lại**:
+- Backup tool (`rsync`, `tar`, `borg`) — nếu backup toàn hệ thống → thêm rule con 0-level suppress theo `audit.auid` = service account backup
+- Custom PAM module → whitelist theo path binary tuỳ setup
 
 **Suggested response**:
 1. Isolate host qua Wazuh active-response (network drop)
-2. Query enrichment tool (Phase 5) — xem process `audit.exe` có hash malware trên VirusTotal
-3. Kiểm tra `bash_history` của user với `audit.auid` trong 1h trước
+2. Query `/var/log/auth.log` grep sudo command để có audit trail
+3. Grab `~/.bash_history` của user với `audit.auid`
+4. **Assume shadow file exfiltrated** → rotate ALL user password
+5. Force MFA nếu chưa có
 4. Snapshot `/etc/shadow` để so sánh nếu bị copy đi
 
 **Test playbook**:

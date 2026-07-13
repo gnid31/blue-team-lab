@@ -142,3 +142,9 @@
 - result: **10 alerts** (100105 x5 Win, 100115 x5 Linux) level 5 MITRE T1087.001. Không cần debug lần này (thanks lesson từ sessions 1,2). TTD Win ~0.2s, Linux ~1s. Insight: net.exe → net1.exe spawn tạo duplicate; Linux có 1 event uid=0 anomaly.
 - learnings: cross-platform rule strategy hiệu quả. Level 5 (low) = anti-FP, dựa vào correlation rule sau. Đề xuất rule 100125 correlation frequency=5 timeframe=300.
 - next: session 05 T1003.008 /etc/shadow read (Linux only)
+
+## 2026-07-13 14:44 | claude | kali+linux-ep | phase6-session-05-COMPLETE
+- what: T1003.008 /etc/shadow read (Linux). Deploy audit rule `-p rwa` cho /etc/shadow, trigger `sudo cat /etc/shadow`. Rule 100100 fire 8 alerts (7 FP: sshd auth, systemd init, sudo password check + 1 TP: cat). Sau đó apply whitelist regex negate cho known-good readers + tạo rule 100120 (level 14) escalate cho attacker tools (cat, less, dd, ...). Retrigger: **1 alert level 14 chính xác**.
+- result: 8 → 1 alert, precision 100%. Real data study về FP challenge của T1003.008. Đây là **case study rule tuning** tốt nhất trong toàn Phase 6.
+- learnings: Detection cho T1003.008 KHÔNG THỂ đơn giản chỉ match audit key — cần whitelist system readers. RULES.md rule 100100 đã update với real FP data.
+- next: Phase 6 SUMMARY report
