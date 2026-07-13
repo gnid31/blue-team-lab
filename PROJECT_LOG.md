@@ -136,3 +136,9 @@
 - result: **rule 100104 fire NGAY LẦN ĐẦU** level 10 T1053.005 (multi-tactic Execution+Persistence+PrivEsc), TTD ~1s. Windows Security 4698 chain (60103) hoạt động sạch — không cần debug như Sysmon rule.
 - learnings: Sysmon rule chain 61603/61615 khó; Windows Security 60103 chain đơn giản. Cần enable auditpol trước khi lab, nếu không EID 4698 = 0. Đã cập nhật docs/04 §9 Appendix — Rule debugging lessons.
 - next: session 04 T1087.001 Account Discovery
+
+## 2026-07-13 14:18 | claude | kali+win-ep+linux-ep | phase6-session-04-COMPLETE
+- what: T1087.001 Account Discovery — cross-platform. Preemptive fix rule 100105 dùng if_group=sysmon_event1 + originalFileName (áp dụng lesson từ session 01). Trigger đồng thời: Win `net user, net localgroup, whoami /all`; Linux `whoami, id, getent passwd, w`.
+- result: **10 alerts** (100105 x5 Win, 100115 x5 Linux) level 5 MITRE T1087.001. Không cần debug lần này (thanks lesson từ sessions 1,2). TTD Win ~0.2s, Linux ~1s. Insight: net.exe → net1.exe spawn tạo duplicate; Linux có 1 event uid=0 anomaly.
+- learnings: cross-platform rule strategy hiệu quả. Level 5 (low) = anti-FP, dựa vào correlation rule sau. Đề xuất rule 100125 correlation frequency=5 timeframe=300.
+- next: session 05 T1003.008 /etc/shadow read (Linux only)

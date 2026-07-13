@@ -140,8 +140,8 @@
        Data source: Sysmon EventID 1, image = net.exe / whoami.exe / quser.exe
        ========================================================= -->
   <rule id="100105" level="5">
-    <if_sid>61603</if_sid>
-    <field name="win.eventdata.image" type="pcre2">(?i)\\\\(net\.exe|net1\.exe|whoami\.exe|quser\.exe|nltest\.exe)$</field>
+    <if_group>sysmon_event1</if_group>
+    <field name="win.eventdata.originalFileName" type="pcre2">(?i)^(net\.exe|net1\.exe|whoami\.exe|quser\.exe|nltest\.exe)$</field>
     <field name="win.eventdata.commandLine" type="pcre2">(?i)(\buser\b|\blocalgroup\b|\bgroup\b|/domain|/all|\bdclist\b)</field>
     <description>T1087.001 - Account discovery via $(win.eventdata.image) [$(win.eventdata.commandLine)]</description>
     <mitre>
