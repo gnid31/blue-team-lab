@@ -24,7 +24,7 @@
 | 3     | Windows endpoint + Sysmon          | **DONE**   |
 | 4     | 10 detection rules MITRE ATT&CK    | **DONE**   |
 | 5     | Python enrichment (VT + AbuseIPDB) | **DONE**   |
-| 6     | Atomic Red Team hunting reports    | TODO       |
+| 6     | Atomic Red Team hunting reports    | IN PROGRESS |
 
 ## Thông tin hạ tầng
 
@@ -92,3 +92,9 @@
 - what: verified Sysmon status and Event Log, fixed single quotes in ossec.conf (WAZUH_MANAGER, WAZUH_AGENT_NAME, WAZUH_AGENT_GROUP) causing connection and enrollment failures, restarted WazuhSvc
 - result: ok — agent successfully enrolled and connected to Wazuh Manager (43.228.215.234:1514). ossec.log confirms: "Analyzing event log: 'Microsoft-Windows-Sysmon/Operational'". Tested with notepad.exe trigger which successfully registered in Sysmon log.
 - next: Claude verify from Kali/Manager side that Sysmon alerts from win-ep-01 are visible.
+
+## 2026-07-13 17:58 | gemini | win-ep | phase6-setup
+- what: installed Invoke-AtomicRedTeam framework + atomics repo
+- result: ok — module loaded, T1059.001 -ShowDetails OK
+- next: chờ Claude signal chạy session 1
+
