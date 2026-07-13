@@ -22,7 +22,7 @@
 | 1     | Wazuh AIO trên VPS                 | **DONE**   |
 | 2     | Ubuntu endpoint + auditd           | **DONE**   |
 | 3     | Windows endpoint + Sysmon          | **DONE**   |
-| 4     | 10 detection rules MITRE ATT&CK    | TODO       |
+| 4     | 10 detection rules MITRE ATT&CK    | **DONE**   |
 | 5     | Python enrichment (VT + AbuseIPDB) | TODO       |
 | 6     | Atomic Red Team hunting reports    | TODO       |
 
@@ -60,6 +60,13 @@
 ## 2026-07-09 16:15 | claude | linux-ep | phase2
 - what: scp wazuh-audit.rules → /etc/audit/rules.d/wazuh.rules, augenrules --load
 - result: ok — 26 rule active trong kernel (auditctl -l), audit.log ghi bình thường (3013 SYSCALL sau 5 phút)
+
+## 2026-07-13 XX:XX | claude | vps | phase4
+- what: viết wazuh-rules/local_rules.xml (10 primary + 3 sub-rules = 13 rule XML, ID 100100–100119), scp lên VPS `/var/ossec/etc/rules/local_rules.xml`, restart wazuh-manager
+- result: ok — analysisd -t exit 0, manager active, API xác nhận 13 rule loaded đúng ID/level/description. Chưa fire alert (chờ trigger).
+- what2: viết wazuh-rules/RULES.md (rule catalog theo yêu cầu CV: logic, data source, level, false-positive profile, suggested response, test playbook cho từng rule)
+- what3: update auditd/wazuh-audit.rules — đổi `-w /etc/shadow -p wa` thành `-w /etc/shadow -p rwa -k credential_read` để bắt read event (cần cho rule 100100). Cần reload trên linux-ep-01 khi VM lên lại (sudo augenrules --load).
+- next: Phase 5 — Python IOC enrichment tool; user test trigger 10 rule bằng playbook trong RULES.md
 
 ## 2026-07-13 06:46 | gemini + claude | win-ep + vps | phase3
 - what: Gemini thêm <localfile> Microsoft-Windows-Sysmon/Operational (log_format=eventchannel) vào ossec.conf trên win-ep-01, restart WazuhSvc

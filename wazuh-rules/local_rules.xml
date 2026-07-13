@@ -1,0 +1,214 @@
+<!-- ============================================================
+     Blue Team Lab — Custom Detection Rules
+     ID range: 100100 – 100199
+     Author:   Tran Cong Dinh
+     Mapped to MITRE ATT&CK — see wazuh-rules/RULES.md for FP profile
+     ============================================================ -->
+
+<!-- ================================================================
+     LINUX (auditd) rules
+     ================================================================ -->
+<group name="linux,mitre,blue-team-lab,">
+
+  <!-- =========================================================
+       100100 — T1003.008 Credential Dumping: read of /etc/shadow
+       Data source: auditd, key=credential_read (added via -p r on /etc/shadow)
+       Requires: audit rule "-w /etc/shadow -p rwa -k credential_read"
+       ========================================================= -->
+  <rule id="100100" level="12">
+    <if_sid>80700</if_sid>
+    <field name="audit.key">^credential_read$</field>
+    <description>T1003.008 - Read of /etc/shadow by $(audit.exe) [uid=$(audit.uid), auid=$(audit.auid)]</description>
+    <mitre>
+      <id>T1003.008</id>
+    </mitre>
+    <group>credential_access,pci_dss_10.2.5,gdpr_IV_35.7.d,</group>
+  </rule>
+
+  <!-- =========================================================
+       100115 — T1087.001 Account Discovery (Linux)
+       Data source: auditd execve of id/whoami/getent
+       ========================================================= -->
+  <rule id="100115" level="5">
+    <if_sid>80700</if_sid>
+    <field name="audit.key">^execve$</field>
+    <field name="audit.exe" type="pcre2">/(whoami|id|getent|w|who|lastlog)$</field>
+    <description>T1087.001 - Local account discovery via $(audit.exe) [uid=$(audit.uid)]</description>
+    <mitre>
+      <id>T1087.001</id>
+    </mitre>
+    <group>discovery,</group>
+  </rule>
+
+  <!-- =========================================================
+       100119 — T1074.001 Local Data Staging (Linux)
+       Data source: auditd execve of tar/zip/gzip/7z targeting /tmp
+       ========================================================= -->
+  <rule id="100119" level="10">
+    <if_sid>80700</if_sid>
+    <field name="audit.key">^execve$</field>
+    <field name="audit.exe" type="pcre2">/(tar|zip|gzip|7z|xz|bzip2)$</field>
+    <field name="audit.command" type="pcre2">/tmp/|/dev/shm/</field>
+    <description>T1074.001 - Local staging: archive tool $(audit.exe) targeting /tmp or /dev/shm</description>
+    <mitre>
+      <id>T1074.001</id>
+    </mitre>
+    <group>collection,</group>
+  </rule>
+
+</group>
+
+
+<!-- ================================================================
+     WINDOWS (Sysmon + Windows Security) rules
+     ================================================================ -->
+<group name="windows,mitre,blue-team-lab,">
+
+  <!-- =========================================================
+       100101 — T1059.001 Suspicious PowerShell cmdline
+       Data source: Sysmon EventID 1 (Process Create), image=powershell.exe
+       ========================================================= -->
+  <rule id="100101" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\(powershell|pwsh)\.exe$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(-e(nc|ncodedcommand)\s|\s-w\s+hidden|\s-nop\b|-executionpolicy\s+bypass|\biex\s*\(|DownloadString\s*\(|FromBase64String\s*\()</field>
+    <description>T1059.001 - Suspicious PowerShell cmdline: $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1059.001</id>
+    </mitre>
+    <group>execution,</group>
+  </rule>
+
+  <!-- =========================================================
+       100102 — T1543.003 Windows Service Create
+       Data source: Windows Security EventID 4697
+       ========================================================= -->
+  <rule id="100102" level="10">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4697$</field>
+    <description>T1543.003 - New Windows service installed: $(win.eventdata.serviceName) [$(win.eventdata.serviceFileName)]</description>
+    <mitre>
+      <id>T1543.003</id>
+    </mitre>
+    <group>persistence,</group>
+  </rule>
+
+  <!-- Sub-rule: escalate if service binary is a LOLBIN -->
+  <rule id="100112" level="14">
+    <if_sid>100102</if_sid>
+    <field name="win.eventdata.serviceFileName" type="pcre2">(?i)(powershell|cmd\.exe|wscript|cscript|mshta|rundll32|regsvr32|certutil|bitsadmin)</field>
+    <description>T1543.003 - Suspicious service binary (LOLBIN): $(win.eventdata.serviceFileName)</description>
+    <mitre>
+      <id>T1543.003</id>
+    </mitre>
+    <group>persistence,defense_evasion,</group>
+  </rule>
+
+  <!-- =========================================================
+       100103 — T1021.002 SMB Lateral Movement
+       Data source: Windows Security EventID 4624 LogonType=3 from RFC1918 IP
+       ========================================================= -->
+  <rule id="100103" level="8">
+    <if_sid>60106</if_sid>
+    <field name="win.system.eventID">^4624$</field>
+    <field name="win.eventdata.logonType">^3$</field>
+    <field name="win.eventdata.ipAddress" type="pcre2">^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)</field>
+    <field name="win.eventdata.targetUserName" negate="yes" type="pcre2">^(ANONYMOUS LOGON|SYSTEM|LOCAL SERVICE|NETWORK SERVICE|.*\$)$</field>
+    <description>T1021.002 - SMB/network logon: $(win.eventdata.targetUserName) from $(win.eventdata.ipAddress)</description>
+    <mitre>
+      <id>T1021.002</id>
+    </mitre>
+    <group>lateral_movement,</group>
+  </rule>
+
+  <!-- =========================================================
+       100104 — T1053.005 Scheduled Task creation
+       Data source: Windows Security EventID 4698
+       ========================================================= -->
+  <rule id="100104" level="10">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4698$</field>
+    <description>T1053.005 - Scheduled Task created: $(win.eventdata.taskName) by $(win.eventdata.subjectUserName)</description>
+    <mitre>
+      <id>T1053.005</id>
+    </mitre>
+    <group>persistence,</group>
+  </rule>
+
+  <!-- =========================================================
+       100105 — T1087.001 Account Discovery (Windows)
+       Data source: Sysmon EventID 1, image = net.exe / whoami.exe / quser.exe
+       ========================================================= -->
+  <rule id="100105" level="5">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\(net\.exe|net1\.exe|whoami\.exe|quser\.exe|nltest\.exe)$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(\buser\b|\blocalgroup\b|\bgroup\b|/domain|/all|\bdclist\b)</field>
+    <description>T1087.001 - Account discovery via $(win.eventdata.image) [$(win.eventdata.commandLine)]</description>
+    <mitre>
+      <id>T1087.001</id>
+    </mitre>
+    <group>discovery,</group>
+  </rule>
+
+  <!-- =========================================================
+       100106 — T1550.002 Pass-the-Hash indicator
+       Data source: Windows Security EventID 4624, LogonType=3, NTLM auth
+       Heuristic: non-service network logon using NTLM
+       ========================================================= -->
+  <rule id="100106" level="14">
+    <if_sid>60106</if_sid>
+    <field name="win.system.eventID">^4624$</field>
+    <field name="win.eventdata.logonType">^3$</field>
+    <field name="win.eventdata.authenticationPackageName">^NTLM$</field>
+    <field name="win.eventdata.logonProcessName" type="pcre2">^(NtLmSsp|User32)$</field>
+    <field name="win.eventdata.targetUserName" negate="yes" type="pcre2">^(ANONYMOUS LOGON|SYSTEM|LOCAL SERVICE|NETWORK SERVICE|.*\$)$</field>
+    <description>T1550.002 - Possible Pass-the-Hash: user $(win.eventdata.targetUserName) via NTLM network logon from $(win.eventdata.ipAddress)</description>
+    <mitre>
+      <id>T1550.002</id>
+    </mitre>
+    <group>defense_evasion,lateral_movement,</group>
+  </rule>
+
+  <!-- =========================================================
+       100107 — T1562.001 Disable Defender / Security Tool
+       Data source: Sysmon EventID 1, suspicious cmdline
+       ========================================================= -->
+  <rule id="100107" level="14">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(Set-MpPreference\s.*(?:Disable|-D\w*Realtime)|sc(?:\.exe)?\s+(?:stop|delete|config)\s+(?:WinDefend|Sense|MpsSvc|WdNisSvc)|Uninstall-WindowsFeature\s+Windows-Defender|Add-MpPreference\s+-ExclusionPath|netsh\s+advfirewall\s+set\s+.*state\s+off)</field>
+    <description>T1562.001 - Attempt to disable defense: $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>defense_evasion,</group>
+  </rule>
+
+  <!-- =========================================================
+       100108 — T1547.001 Registry Run Key persistence
+       Data source: Sysmon EventID 13 (RegistryEvent SetValue)
+       ========================================================= -->
+  <rule id="100108" level="12">
+    <if_sid>61615</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\CurrentVersion\\(Run|RunOnce|RunServices|RunServicesOnce|Explorer\\Run|Winlogon\\Shell|Winlogon\\Userinit)\\</field>
+    <description>T1547.001 - Autorun key modified: $(win.eventdata.targetObject) = $(win.eventdata.details) by $(win.eventdata.image)</description>
+    <mitre>
+      <id>T1547.001</id>
+    </mitre>
+    <group>persistence,</group>
+  </rule>
+
+  <!-- =========================================================
+       100109 — T1074.001 Local Data Staging (Windows)
+       Data source: Sysmon EventID 11 (FileCreate) — archive in Temp
+       ========================================================= -->
+  <rule id="100109" level="10">
+    <if_sid>61613</if_sid>
+    <field name="win.eventdata.targetFilename" type="pcre2">(?i)\\(Temp|Windows\\Temp|AppData\\Local\\Temp|ProgramData)\\[^\\]+\.(zip|rar|7z|tar|gz|cab|arj)$</field>
+    <description>T1074.001 - Archive created in staging path: $(win.eventdata.targetFilename) by $(win.eventdata.image)</description>
+    <mitre>
+      <id>T1074.001</id>
+    </mitre>
+    <group>collection,</group>
+  </rule>
+
+</group>

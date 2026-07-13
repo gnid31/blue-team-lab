@@ -22,8 +22,10 @@
 ## ---------- T1136 Account creation ----------
 -w /etc/passwd -p wa -k identity
 -w /etc/group  -p wa -k identity
--w /etc/shadow -p wa -k identity
 -w /etc/gshadow -p wa -k identity
+
+## ---------- T1003.008 Credential dumping (read of hash files) ----------
+-w /etc/shadow -p rwa -k credential_read
 
 ## ---------- T1543.002 SystemD service persistence ----------
 -w /etc/systemd/system/ -p wa -k systemd_persist
