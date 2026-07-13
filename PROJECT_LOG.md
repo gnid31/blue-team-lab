@@ -119,3 +119,8 @@
 - result: test failed (blocked by Windows Defender: Mimikatz payload), cleanup completed
 - next: Claude hunt on Wazuh side + verify rule 100101
 
+
+## 2026-07-13 12:05 | claude | kali+win-ep | phase6-session-01-COMPLETE
+- what: setup SSH Kali→Win qua labuser + key ed25519, chuyển toàn bộ Phase 6 sang autonomous (không cần Gemini relay). Rule 100101 debug + fix (dùng if_group=sysmon_event1 + field originalFileName + commandLine regex thay vì if_sid=61603 + image path). Trigger T1059.001 mimic (EncodedCommand + w hidden + ExecutionPolicy Bypass) trực tiếp qua SSH.
+- result: **rule 100101 fire 2 alerts level 12 T1059.001** đúng thiết kế. Timeline reconstruct hoàn chỉnh (SSH login → sshd-session.exe → powershell.exe). Enrichment: 10 verdict VT, tất cả clean (hash powershell.exe hợp pháp — điểm bài học "behavior > IOC"). Report: hunting-reports/session-01-T1059.001.md
+- next: session 2 T1547.001 Registry Run Key
