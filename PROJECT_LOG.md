@@ -23,7 +23,7 @@
 | 2     | Ubuntu endpoint + auditd           | **DONE**   |
 | 3     | Windows endpoint + Sysmon          | **DONE**   |
 | 4     | 10 detection rules MITRE ATT&CK    | **DONE**   |
-| 5     | Python enrichment (VT + AbuseIPDB) | TODO       |
+| 5     | Python enrichment (VT + AbuseIPDB) | **DONE**   |
 | 6     | Atomic Red Team hunting reports    | TODO       |
 
 ## Thông tin hạ tầng
@@ -60,6 +60,11 @@
 ## 2026-07-09 16:15 | claude | linux-ep | phase2
 - what: scp wazuh-audit.rules → /etc/audit/rules.d/wazuh.rules, augenrules --load
 - result: ok — 26 rule active trong kernel (auditctl -l), audit.log ghi bình thường (3013 SYSCALL sau 5 phút)
+
+## 2026-07-13 | claude | kali | phase5
+- what: build enrichment/ Python CLI (enrich.py + wazuh_client.py + ioc.py + providers.py + cache.py), venv + rich/click/dotenv/requests, SSH tunnel Kali:9200 → VPS:9200 tự setup
+- result: ok — test thực tế trên 3 alert SSH brute force (rule 2502) → 2 unique IP (62.60.130.219 Cipher Serbia, 45.148.10.141 Techoff) đều xác nhận MALICIOUS bởi cả VT (15+/91, 17+/91) và AbuseIPDB (100/100). Cache SQLite hoạt động.
+- next: Phase 6 — Atomic Red Team hunting sessions
 
 ## 2026-07-13 XX:XX | claude | vps | phase4
 - what: viết wazuh-rules/local_rules.xml (10 primary + 3 sub-rules = 13 rule XML, ID 100100–100119), scp lên VPS `/var/ossec/etc/rules/local_rules.xml`, restart wazuh-manager
