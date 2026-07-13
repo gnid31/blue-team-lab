@@ -1,5 +1,6 @@
 """CLI enrich: Wazuh alerts → IOC extract → VT/AbuseIPDB verdict → pretty console."""
 from __future__ import annotations
+import datetime as _dt
 import os
 import sys
 from pathlib import Path
@@ -127,7 +128,9 @@ def _render_alert(ea: ExtractedAlert, enriched: dict[str, list[Verdict]]) -> Non
 @click.option("--limit", "-n", type=int, default=10, show_default=True,
               help="Số alert tối đa fetch")
 @click.option("--dry-run", is_flag=True, help="In IOC extract, không call API")
-def main(min_level, agent, rule_id, since, limit, dry_run):
+@click.option("--writeback/--no-writeback", default=False,
+              help="Ghi verdict vào Wazuh Indexer (index enrichment-verdicts-YYYY.MM.DD)")
+def main(min_level, agent, rule_id, since, limit, dry_run, writeback):
     """Fetch Wazuh alerts → extract IOCs → enrich với VirusTotal + AbuseIPDB."""
     cfg = _load_env()
 
@@ -175,6 +178,46 @@ def main(min_level, agent, rule_id, since, limit, dry_run):
 
     for e in extracted:
         _render_alert(e, enriched)
+
+    # ---- Writeback to Indexer (Option A) ----
+    if writeback:
+        try:
+            idx.ensure_verdict_index_template()
+        except Exception as e:
+            console.print(f"[red]Failed to create index template:[/red] {e}")
+        else:
+            written = 0
+            now = _dt.datetime.now(_dt.timezone.utc)
+            now_iso = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+            for ea in extracted:
+                for ioc in ea.iocs:
+                    for v in enriched.get(ioc.key(), []):
+                        doc = {
+                            "@timestamp": now_iso,
+                            "alert_id": ea.alert_id,
+                            "alert_timestamp": ea.timestamp,
+                            "agent_name": ea.agent,
+                            "rule_id": ea.rule_id,
+                            "rule_level": ea.rule_level,
+                            "rule_description": ea.rule_desc,
+                            "mitre": ea.mitre,
+                            "ioc_type": ioc.type,
+                            "ioc_value": ioc.value,
+                            "ioc_source_field": ioc.source_field,
+                            "provider": v.provider,
+                            "verdict_label": v.verdict_label,
+                            "malicious": v.malicious,
+                            "total": v.total,
+                            "score": v.score(),
+                            "link": v.link,
+                        }
+                        try:
+                            idx.write_verdict(doc)
+                            written += 1
+                        except Exception as e:
+                            console.print(f"[red]Writeback failed:[/red] {e}")
+            console.print(f"[green]Writeback: indexed {written} verdicts into "
+                          f"enrichment-verdicts-{now:%Y.%m.%d}[/green]")
 
     cache.close()
 

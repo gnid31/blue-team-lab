@@ -99,7 +99,15 @@ Summary  malicious=4  suspicious=0  total_verdicts=4
 - Nếu leak key VT → chỉ đọc-only public data
 - Nếu leak Wazuh admin password → attacker có toàn quyền Dashboard → **đổi password ngay**
 
+## Writeback (Option A) — verdict persistent trong Indexer
+
+Thêm flag `--writeback`:
+```bash
+.venv/bin/python enrich.py -r 2502 --writeback
+```
+Verdict được `PUT` vào index `enrichment-verdicts-YYYY.MM.DD` với schema chuẩn hoá. Analyst xem trên Dashboard qua index pattern `enrichment-verdicts-*` (tạo tự động lần đầu). Chi tiết: `docs/05b-enrichment-writeback.md`.
+
 ## Không làm được
 
-- Ghi verdict ngược về Wazuh alert (Wazuh 4.9 chưa có API endpoint standard cho note-on-alert). Muốn integrate: dùng active-response custom.
+- Ghi verdict **trực tiếp vào alert Wazuh gốc** (Wazuh 4.9 không có API endpoint sửa alert). Writeback tạo document riêng, join qua `alert_id`.
 - Batch nhiều nghìn IOC — free tier VT sẽ hết trong ~2 giờ. Cần Premium API.
