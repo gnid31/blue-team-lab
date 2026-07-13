@@ -112,6 +112,51 @@ Thêm rule mới vào đây, mỗi rule 1 `<group>` hoặc gom lại theo techni
 
 Toàn bộ rule built-in nằm ở `/var/ossec/ruleset/rules/*.xml` — **không sửa** file này (sẽ bị ghi đè khi upgrade). Chỉ đọc để tham chiếu.
 
+### 0.5.b. Cách edit rule — GUI hay CLI?
+
+Có **2 cách** edit `local_rules.xml`, kết quả y hệt nhau:
+
+| Tiêu chí | GUI (Wazuh Dashboard) | CLI (SSH + nano/vim) |
+|---|---|---|
+| Truy cập | Trình duyệt, https://VPS | SSH vào VPS |
+| Editor | Monaco (giống VS Code, có syntax highlight, error underline) | nano / vim |
+| Restart Manager sau save | Có nút "Restart" ngay trong UI | `sudo systemctl restart wazuh-manager` |
+| Backup tự động | **Không** (Wazuh không tự backup — phải tự cp trước) | Bạn `cp` tay |
+| Xem log restart | Ẩn — chỉ báo success/fail | Tail `/var/ossec/logs/ossec.log` thấy chi tiết |
+| Version control | Phải scp file ra Kali xong `git commit` | Cùng workflow |
+| Test bằng `wazuh-logtest` | Không có trong UI | Ok |
+| Phù hợp cho | Sửa nhanh 1 rule, người mới ngại terminal | Batch nhiều rule, muốn dùng regex tool ngoài |
+
+**Recommend**: dùng **GUI để làm quen + viết rule đầu tiên**, chuyển sang **CLI khi đã quen** (nhanh hơn, dễ scriptable). Cả hai đều edit cùng 1 file `/var/ossec/etc/rules/local_rules.xml`, không có "rule GUI-only" tách riêng.
+
+**Cảnh báo**: Dashboard editor **không có Ctrl-Z sâu**. Nếu paste đè nhầm, phải khôi phục từ backup thủ công (xem section 4.1). Luôn `cp` backup trước khi edit lớn.
+
+#### Bước làm bằng GUI
+
+1. Login Dashboard: `https://43.228.215.234`
+2. Menu chính (icon 3 gạch góc trên trái) → **Server management** → **Rules**
+3. Tab **Custom rules** (bên cạnh tab "Manage rules files") — filter chỉ ra các file custom, `local_rules.xml` là dòng đầu.
+4. Click biểu tượng **pencil / Edit** ở cột "Actions" của dòng `local_rules.xml`
+5. Editor Monaco mở ra:
+   - Ctrl-F: search
+   - Ctrl-Space: gợi ý tag XML
+   - Đường lằn đỏ dưới tag = XML invalid
+6. Paste/edit rule XML
+7. Nút **Save** góc trên phải:
+   - Nếu XML sai cú pháp → báo lỗi kèm line, không save
+   - Nếu OK → save + hỏi "Restart Wazuh manager to apply?" → chọn **Yes**
+8. Đợi ~10s Manager restart. Refresh trang.
+9. Xuống dưới, tab **Manage rules files** → thấy `local_rules.xml` cột `Last modified` update giờ hiện tại → confirm.
+
+#### Bước làm bằng CLI (SSH)
+
+Xem section 4.1.
+
+#### Rủi ro chung với GUI khi lab
+
+- User admin Dashboard có full quyền edit rule → nếu credential leak, attacker sửa rule để **tắt detection cho chính họ**. Khắc phục: tạo user Dashboard read-only cho analyst, chỉ dùng admin khi cần edit.
+- Không có audit log built-in ai đã edit file khi nào (Wazuh 4.9). Ở production: dùng Git + SSH-based workflow để có `git blame`, không edit trực tiếp qua GUI.
+
 ### 0.6. Workflow phát triển rule
 
 ```
