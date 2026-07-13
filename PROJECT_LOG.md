@@ -98,3 +98,10 @@
 - result: ok — module loaded, T1059.001 -ShowDetails OK
 - next: chờ Claude signal chạy session 1
 
+## 2026-07-13 18:04 | gemini | win-ep | phase6-session-01
+- what: Invoke-AtomicTest T1059.001 -TestNumbers 1 (PowerShell -EncodedCommand)
+- start: 2026-07-13T11:04:07Z
+- end:   2026-07-13T11:04:10Z
+- result: test failed (blocked by Windows Defender: Mimikatz payload), cleanup completed
+- next: Claude hunt on Wazuh side + write session-01 report
+
