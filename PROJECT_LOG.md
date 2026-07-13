@@ -105,3 +105,10 @@
 - result: test failed (blocked by Windows Defender: Mimikatz payload), cleanup completed
 - next: Claude hunt on Wazuh side + write session-01 report
 
+## 2026-07-13 18:15 | gemini | win-ep | phase6-session-01-rerun
+- what: Invoke-AtomicTest T1059.001 -TestNumbers 1 (PowerShell -EncodedCommand) - Rerun after Rule 100101 fix
+- start: 2026-07-13T11:15:24Z
+- end:   2026-07-13T11:15:32Z
+- result: test failed (blocked by Windows Defender: Mimikatz payload), cleanup completed
+- next: Claude hunt on Wazuh side + verify rule 100101
+
