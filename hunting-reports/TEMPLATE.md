@@ -1,167 +1,225 @@
-# Hunting Report — Session NN
+# Incident / Hunting Report — [ID]
 
-## Metadata
+> Format: aligned to **NIST SP 800-61r2** (Computer Security Incident Handling Guide) with hunting-oriented adaptations.
+>
+> Field name → NIST section reference.
+
+---
+
+## 1. Incident Identification (NIST §3.2.7)
 
 | Field | Value |
 |---|---|
-| Session # | NN |
-| Date (UTC) | YYYY-MM-DD |
-| Analyst | (tên) |
-| Technique | **Txxxx.xxx — <tên>** |
-| Tactic | (Execution / Persistence / Discovery / …) |
-| Endpoint | win-ep-01 / linux-ep-01 |
-| Custom rule | 100xxx |
-| Data source | Sysmon EID N / auditd key=Y / Windows Security 4XXX |
+| **Report ID** | BTL-YYYY-NNN (Blue Team Lab, year, sequence) |
+| **Detection timestamp (UTC)** | YYYY-MM-DDTHH:MM:SSZ |
+| **Report timestamp (UTC)** | YYYY-MM-DDTHH:MM:SSZ |
+| **Analyst / Handler** | (name / role) |
+| **Status** | New \| In Progress \| Contained \| Eradicated \| Recovered \| **Closed** |
+| **Confidence** | Low \| Medium \| High (analyst confidence trong finding) |
 
 ---
 
-## 1. Attack summary
+## 2. Incident Categorization (NIST §2.1)
 
-Command đã chạy (mô phỏng attacker):
+| Field | Value |
+|---|---|
+| **Attack vector** | External \| Internal \| Web \| Email \| Removable Media \| Impersonation \| Improper Usage \| Loss/Theft \| Other |
+| **Threat actor** | External \| Insider \| Simulated (Red Team / Atomic) \| Unknown |
+| **NIST incident category** | DoS \| Malicious Code \| Unauthorized Access \| Improper Usage \| Reconnaissance \| Investigation |
+| **MITRE ATT&CK Tactic** | (VD: Execution, Persistence) |
+| **MITRE ATT&CK Technique** | Txxxx.xxx |
+| **MITRE reference** | https://attack.mitre.org/techniques/Txxxx/ |
 
-```powershell
-# hoặc bash — copy chính xác từ atomic/Txxxx.md
+---
+
+## 3. Incident Prioritization (NIST §3.2.6)
+
+NIST-standard impact matrix:
+
+| Dimension | Value | Justification |
+|---|---|---|
+| **Functional Impact** | None \| Low \| Medium \| High | (mức ảnh hưởng đến operation) |
+| **Information Impact** | None \| Privacy Breach \| Proprietary Breach \| Integrity Loss | (data leak / tamper?) |
+| **Recoverability** | Regular \| Supplemented \| Extended \| Not Recoverable | (nỗ lực phục hồi) |
+| **Overall Priority** | **Low \| Medium \| High \| Critical** | (composite từ 3 dimension trên) |
+
+Matrix mapping (theo NIST 800-61r2 Table 3-3):
+
+```
+                    │ Functional Impact
+                    │ None    Low    Medium    High
+────────────────────┼─────────────────────────────────
+Info: None          │ Low    Low    Medium    High
+Info: Privacy       │ Low    Med    Medium    High
+Info: Proprietary   │ Med    Med    High      Critical
+Info: Integrity     │ Med    High   High      Critical
 ```
 
-| Thời điểm | Sự kiện |
-|---|---|
-| YYYY-MM-DD HH:MM:SS UTC | Start test |
-| YYYY-MM-DD HH:MM:SS UTC | Command completed |
-| YYYY-MM-DD HH:MM:SS UTC | Cleanup |
-
 ---
 
-## 2. Hypothesis
+## 4. Detection & Analysis (NIST §3.2)
 
-> Nếu attacker chạy Txxxx trên endpoint, ta kỳ vọng thấy:
-> - [ ] Sysmon EID N với image=... commandLine chứa ...
-> - [ ] Custom rule 100xxx bắn alert level Y
-> - [ ] MITRE tag Txxxx trong alert
-> - [ ] IOC extract: (hash / IP / domain)
+### 4.1. Detection method
 
----
+- Automated (rule ID `Nxxxxx` matched) \| Manual hunt \| TI feed \| User report
+- **Sensor / Data source**: (Sysmon EID N, auditd key=X, Windows Security 4XXX, ...)
 
-## 3. Hunt queries
+### 4.2. Hypothesis (nếu proactive hunt)
 
-### DSL query (OpenSearch)
+> Nếu <condition>, ta kỳ vọng thấy <observable> trong <log source>.
+
+### 4.3. Hunt queries
+
+**OpenSearch DSL**:
 ```json
 POST /wazuh-alerts-*/_search
-{
-  "query": { … }
-}
+{ ... }
 ```
 
-### Dashboard filter (KQL)
+**Dashboard KQL**:
 ```
-agent.name : "…" AND rule.id : "…" AND @timestamp >= "…"
+rule.id : "..." AND @timestamp >= "..."
 ```
 
----
-
-## 4. Findings
+### 4.4. Findings
 
 | Metric | Value |
 |---|---|
 | Alert count | N |
-| Custom rule fired | 100xxx (Y/N) |
-| Built-in rule matched | 61xxx / 92xxx / … |
-| Highest level | X |
-| MITRE tag confirmed | Txxxx |
+| Custom rule fired | Nxxxxx (Y/N) |
+| Highest severity level | N |
+| MITRE tag confirmed | Txxxx.xxx |
+| False positives concurrent | N |
 
-Raw alert JSON (rút gọn):
+**Sample event JSON** (rút gọn):
 ```json
-{
-  "@timestamp": "…",
-  "rule": {"id": "…", "level": …, "description": "…"},
-  "data": { … }
-}
+{ "rule": { "id": "...", "level": ..., "mitre": {...} },
+  "data": { ... } }
 ```
 
 ---
 
-## 5. Timeline reconstruction
+## 5. Chronology / Timeline (NIST §3.2.5)
 
-Chronological từ raw event (Sysmon/auditd), không phải chỉ alert:
+Chronological reconstruction từ raw log:
 
-| T+  | Event | Source | Chi tiết |
-|-----|-------|--------|----------|
-| T+0s | Process create | Sysmon EID 1 | parentImage=`cmd.exe`, image=`powershell.exe`, cmdline=… |
-| T+1s | Network connect | Sysmon EID 3 | destination=… |
-| T+2s | File create | Sysmon EID 11 | file=… |
-| T+3s | Registry set | Sysmon EID 13 | key=…, value=… |
-
-Query để lấy timeline:
-```
-agent.name : "win-ep-01" AND @timestamp >= "T0" AND @timestamp <= "T0+60s"
-```
+| Timestamp (UTC) | Actor | Action | Source | Notes |
+|---|---|---|---|---|
+| T0 | attacker | ssh login | 4624 | user=labuser |
+| T0+2s | attacker | powershell.exe -EncodedCommand ... | Sysmon EID 1 | rule 100101 fires |
+| T0+3s | ... | ... | ... | ... |
 
 ---
 
-## 6. IOC list
+## 6. Scope (NIST §3.2.7)
+
+### 6.1. Affected systems
+
+| Hostname | IP | OS | Role | Impact |
+|---|---|---|---|---|
+| win-ep-01 | 192.168.154.164 | Windows 10 | Endpoint | (compromised / attempted / N/A) |
+
+### 6.2. Affected users / accounts
+
+| Account | Role | Notes |
+|---|---|---|
+| labuser | Local Administrator | (test account, isolated) |
+
+### 6.3. Affected data
+
+- **PII exposed**: (Yes/No — chi tiết)
+- **Confidential business data**: (Yes/No)
+- **Credentials / secrets**: (Yes/No)
+
+### 6.4. Indicators of Compromise (IOCs)
 
 | Type | Value | Source field | Notes |
 |---|---|---|---|
-| SHA256 | … | `data.win.eventdata.hashes` | binary attacker dropped |
-| IP | … | `data.win.eventdata.destinationIp` | C2 nghi ngờ |
-| Domain | … | `data.win.eventdata.queryName` | DNS query |
-| File | … | `data.win.eventdata.targetFilename` | staging location |
+| SHA256 | ... | data.win.eventdata.hashes | binary |
+| IP | ... | data.win.eventdata.destinationIp | C2 nghi ngờ |
+| Domain | ... | ... | ... |
 
----
+### 6.5. TI Enrichment (VT / AbuseIPDB)
 
-## 7. Enrichment
-
-Chạy tool: `python enrich.py -r 100xxx --writeback`
-
-| IOC | Provider | Verdict | Score | Link |
+| IOC | Provider | Verdict | Score | Analysis date |
 |---|---|---|---|---|
-| … | VirusTotal | malicious | 15/91 | https://… |
-| … | AbuseIPDB | malicious | 100/100 | https://… |
+| ... | VirusTotal | malicious | 15/91 | ... |
+| ... | AbuseIPDB | malicious | 100/100 | ... |
+
+**Enrichment tool run**: `python enrich.py -r <rule_id> --writeback`
+**Verdict indexed**: `enrichment-verdicts-YYYY.MM.DD`
 
 ---
 
-## 8. MITRE mapping
+## 7. Containment, Eradication, Recovery (NIST §3.3, §3.4)
 
-| Field | Value |
-|---|---|
-| Tactic | Execution |
-| Technique | T1059 Command & Scripting Interpreter |
-| Sub-technique | T1059.001 PowerShell |
-| Reference | https://attack.mitre.org/techniques/T1059/001/ |
+### 7.1. Containment strategy
 
-Kill chain step (nếu có sub-events): reconstruction xem section 5.
+- **Short-term**: (isolate host, block IP, kill process)
+- **Long-term**: (patch, rotate credential, disable account)
+- **Evidence preservation**: (memory dump, disk image, log snapshot)
 
----
+### 7.2. Eradication actions
 
-## 9. Detection assessment
+- [ ] Kill malicious process (PID X)
+- [ ] Remove persistence artifact (Registry key, service, scheduled task)
+- [ ] Revoke compromised credential
+- [ ] Quarantine dropped file
 
-- **Rule custom 100xxx**:
-  - Fired: (Y/N)
-  - Đúng level? (Y/N — nếu quá thấp/cao đề xuất chỉnh)
-  - False positive tiềm năng: …
-- **Gap detection**: technique có sub-command nào không match rule không? (VD `-EncodedCommand` viết hoa vs thường)
-- **Suggested rule tuning**: … (VD thêm regex, thêm parent context)
+### 7.3. Recovery actions
 
----
+- [ ] Restore from clean backup (nếu compromise sâu)
+- [ ] Rebuild host (nếu rootkit / kernel-level compromise)
+- [ ] Reset password + rotate keys
+- [ ] Re-enable services
 
-## 10. Remediation (nếu là thật)
+### 7.4. Verification
 
-1. **Contain**: isolate host qua Wazuh active-response `firewall-drop`
-2. **Eradicate**: kill process, xoá autorun key, gỡ scheduled task
-3. **Recover**: rebuild host nếu compromise sâu, reset credential user
-4. **Lessons learned**: cập nhật rule 100xxx nếu detection có gap
+- Alert level tương tự không tái xuất hiện trong X giờ sau
+- Endpoint hoạt động bình thường
+- Không thấy IOC trong log tail 24h
 
 ---
 
-## 11. Screenshots (optional)
+## 8. Post-Incident Activity (NIST §3.5)
 
-- Dashboard alert view
-- Discover timeline
-- Enrichment console output
+### 8.1. Lessons learned
+
+- Rule detection có gap không? (VD: technique variant không match regex)
+- Time-to-detect (TTD): T_detect - T_attack
+- Time-to-respond (TTR): T_contain - T_detect
+
+### 8.2. Detection improvements
+
+- [ ] Rule tuning: (VD: thêm regex pattern, giảm level FP)
+- [ ] Sensor tuning: (VD: bật thêm Sysmon config)
+- [ ] Correlation rule: (multi-event pattern)
+
+### 8.3. Prevention measures
+
+- [ ] Application whitelist
+- [ ] Group Policy tighten (VD: PowerShell Constrained Language)
+- [ ] Network segmentation
+- [ ] Analyst training
 
 ---
 
-## 12. References
+## 9. Communications Log (NIST §2.3.4)
 
-- Atomic test source: https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/Txxxx/Txxxx.md
-- MITRE ATT&CK: https://attack.mitre.org/techniques/Txxxx/
-- Wazuh docs: https://documentation.wazuh.com/
+| Timestamp | To/From | Channel | Content summary |
+|---|---|---|---|
+| T+0m | SOC → Manager | Slack | Alert notification |
+| T+10m | SOC → Business | Email | Impact assessment |
+| T+30m | SOC → CIO | Phone | Escalation (nếu Critical) |
+
+---
+
+## 10. References & Attachments
+
+- Atomic test source: https://github.com/redcanaryco/atomic-red-team/tree/master/atomics/Txxxx/
+- MITRE ATT&CK Txxxx: https://attack.mitre.org/techniques/Txxxx/
+- Wazuh rule: [`wazuh-rules/local_rules.xml`](../wazuh-rules/local_rules.xml)
+- Rule FP profile: [`wazuh-rules/RULES.md`](../wazuh-rules/RULES.md#rule-100xxx)
+- NIST SP 800-61r2: https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-61r2.pdf
+- Enrichment verdict index: `enrichment-verdicts-YYYY.MM.DD`
+- Screenshots: `hunting-reports/screenshots/session-NN/` (optional)
