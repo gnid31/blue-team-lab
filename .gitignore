@@ -27,3 +27,9 @@ venv/
 enrichment/cache/
 enrichment/output/
 hunting-reports/**/raw-alerts/
+
+# nested cache (in case tool CWD is enrichment/)
+enrichment/enrichment/
+**/cache/*.db
+**/*.sqlite
+**/*.sqlite3
