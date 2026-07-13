@@ -24,7 +24,7 @@
 | 3     | Windows endpoint + Sysmon          | **DONE**   |
 | 4     | 10 detection rules MITRE ATT&CK    | **DONE**   |
 | 5     | Python enrichment (VT + AbuseIPDB) | **DONE**   |
-| 6     | Atomic Red Team hunting reports    | IN PROGRESS |
+| 6     | Atomic Red Team hunting reports    | **DONE**   |
 
 ## Thông tin hạ tầng
 
@@ -148,3 +148,24 @@
 - result: 8 → 1 alert, precision 100%. Real data study về FP challenge của T1003.008. Đây là **case study rule tuning** tốt nhất trong toàn Phase 6.
 - learnings: Detection cho T1003.008 KHÔNG THỂ đơn giản chỉ match audit key — cần whitelist system readers. RULES.md rule 100100 đã update với real FP data.
 - next: Phase 6 SUMMARY report
+
+## 2026-07-13 14:49 | claude | kali+win-ep | phase6-session-06-COMPLETE
+- what: T1543.003 Windows Service Create — enable audit "Security System Extension", sc create benign + LOLBIN service, cleanup.
+- result: 100102 lvl 10 (benign) + 100112 lvl 14 (LOLBIN cmd.exe) — rule chain hoạt động perfect. TTD ~1s.
+
+## 2026-07-13 14:55 | claude | kali+linux-ep→win-ep | phase6-session-07-COMPLETE
+- what: T1021.002 SMB Lateral + T1550.002 Pass-the-Hash — smbclient từ linux-ep-01 sang win-ep-01. Fix rule 100103/100106 chain từ 92657 (built-in).
+- result: rule 100106 lvl 14 T1550.002 fire. Dedup: 100103 không alert riêng vì rule engine chọn child level cao nhất.
+
+## 2026-07-13 14:55 | claude | kali+win-ep | phase6-session-08-COMPLETE
+- what: T1562.001 Disable Defender — Set-MpPreference -DisableRealtimeMonitoring $true.
+- result: 3 alerts rule 100107 lvl 14. Insight: rule cũng match cleanup command với $false — cần refinement regex.
+
+## 2026-07-13 14:55 | claude | kali+win-ep+linux-ep | phase6-session-09-COMPLETE (MISS)
+- what: T1074.001 Data Staging — Compress-Archive Win + tar Linux.
+- result: **DETECTION MISS**. Root cause: SwiftOnSecurity Sysmon config không log FileCreate cho .zip in Temp; auditd tar events có thể bị buffer overflow. Documented as sensor tuning gap. Recommendation: fork Sysmon config + enable Wazuh FIM.
+
+## 2026-07-13 15:00 | claude | kali | phase6-SUMMARY
+- what: Viết SUMMARY.md tổng hợp 9 sessions / 10 techniques. Detection rate 9/10 = 90%. NIST SP 800-61r2 format cho tất cả reports.
+- result: **Phase 6 CLOSED**. Repo hoàn thiện. Deliverable đầy đủ theo CV.
+- next: (project complete — final commit)

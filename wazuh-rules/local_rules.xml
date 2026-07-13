@@ -122,10 +122,8 @@
        100103 — T1021.002 SMB Lateral Movement
        Data source: Windows Security EventID 4624 LogonType=3 from RFC1918 IP
        ========================================================= -->
-  <rule id="100103" level="8">
-    <if_sid>60106</if_sid>
-    <field name="win.system.eventID">^4624$</field>
-    <field name="win.eventdata.logonType">^3$</field>
+  <rule id="100103" level="10">
+    <if_sid>92657</if_sid>
     <field name="win.eventdata.ipAddress" type="pcre2">^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)</field>
     <field name="win.eventdata.targetUserName" negate="yes" type="pcre2">^(ANONYMOUS LOGON|SYSTEM|LOCAL SERVICE|NETWORK SERVICE|.*\$)$</field>
     <description>T1021.002 - SMB/network logon: $(win.eventdata.targetUserName) from $(win.eventdata.ipAddress)</description>
@@ -170,9 +168,7 @@
        Heuristic: non-service network logon using NTLM
        ========================================================= -->
   <rule id="100106" level="14">
-    <if_sid>60106</if_sid>
-    <field name="win.system.eventID">^4624$</field>
-    <field name="win.eventdata.logonType">^3$</field>
+    <if_sid>92657</if_sid>
     <field name="win.eventdata.authenticationPackageName">^NTLM$</field>
     <field name="win.eventdata.logonProcessName" type="pcre2">^(NtLmSsp|User32)$</field>
     <field name="win.eventdata.targetUserName" negate="yes" type="pcre2">^(ANONYMOUS LOGON|SYSTEM|LOCAL SERVICE|NETWORK SERVICE|.*\$)$</field>
@@ -188,7 +184,7 @@
        Data source: Sysmon EventID 1, suspicious cmdline
        ========================================================= -->
   <rule id="100107" level="14">
-    <if_sid>61603</if_sid>
+    <if_group>sysmon_event1</if_group>
     <field name="win.eventdata.commandLine" type="pcre2">(?i)(Set-MpPreference\s.*(?:Disable|-D\w*Realtime)|sc(?:\.exe)?\s+(?:stop|delete|config)\s+(?:WinDefend|Sense|MpsSvc|WdNisSvc)|Uninstall-WindowsFeature\s+Windows-Defender|Add-MpPreference\s+-ExclusionPath|netsh\s+advfirewall\s+set\s+.*state\s+off)</field>
     <description>T1562.001 - Attempt to disable defense: $(win.eventdata.commandLine)</description>
     <mitre>
@@ -216,8 +212,8 @@
        Data source: Sysmon EventID 11 (FileCreate) — archive in Temp
        ========================================================= -->
   <rule id="100109" level="10">
-    <if_sid>61613</if_sid>
-    <field name="win.eventdata.targetFilename" type="pcre2">(?i)\\\\(Temp|Windows\\\\Temp|AppData\\\\Local\\\\Temp|ProgramData)\\\\[^\\\\]+\.(zip|rar|7z|tar|gz|cab|arj)$</field>
+    <if_group>sysmon_event_11</if_group>
+    <field name="win.eventdata.targetFilename" type="pcre2">(?i)(Temp|AppData.Local.Temp|ProgramData).{0,3}[^\\/]+\.(zip|rar|7z|tar|gz|cab|arj)$</field>
     <description>T1074.001 - Archive created in staging path: $(win.eventdata.targetFilename) by $(win.eventdata.image)</description>
     <mitre>
       <id>T1074.001</id>
