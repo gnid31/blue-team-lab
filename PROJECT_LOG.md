@@ -130,3 +130,9 @@
 - result: rule 100108 fire 1 alert level 12 T1547.001, targetObject=HKU\<SID>\...\Run\BTLab_v6, image=reg.exe, TTD ~1s.
 - gap: rule chỉ bắt khi attacker dùng reg.exe (chain 92302). Powershell/regedit/wmic sẽ miss — cần rule 100118 supplemental.
 - next: session 03 T1053.005 Scheduled Task
+
+## 2026-07-13 14:14 | claude | kali+win-ep | phase6-session-03-COMPLETE
+- what: T1053.005 Scheduled Task — enable audit "Other Object Access Events" (default OFF trên fresh Win), schtasks /create qua SSH, cleanup /delete.
+- result: **rule 100104 fire NGAY LẦN ĐẦU** level 10 T1053.005 (multi-tactic Execution+Persistence+PrivEsc), TTD ~1s. Windows Security 4698 chain (60103) hoạt động sạch — không cần debug như Sysmon rule.
+- learnings: Sysmon rule chain 61603/61615 khó; Windows Security 60103 chain đơn giản. Cần enable auditpol trước khi lab, nếu không EID 4698 = 0. Đã cập nhật docs/04 §9 Appendix — Rule debugging lessons.
+- next: session 04 T1087.001 Account Discovery

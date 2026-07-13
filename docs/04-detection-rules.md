@@ -822,3 +822,113 @@ Sau khi hoàn thành:
 ```
 
 Và commit `wazuh-rules/local_rules.xml` + `wazuh-rules/RULES.md` vào repo.
+
+---
+
+## 9. Appendix — Rule debugging lessons (từ Phase 6 hunting sessions)
+
+> Section này ghi lại **các lỗi thực tế** khi rule custom không fire dù logic có vẻ đúng. Đọc trước khi viết rule mới để tránh lặp lỗi.
+
+### 9.1. Bug pattern #1 — `<if_sid>` chain sai với Sysmon rule
+
+**Triệu chứng**: Sysmon EID X event có trong indexer (built-in rule khác fire trên cùng event), nhưng custom rule dùng `<if_sid>SysmonParentRuleID</if_sid>` **không fire**.
+
+**Ví dụ cụ thể**:
+- **Rule 100101** (T1059.001 PowerShell) — Session 01
+  - Sai: `<if_sid>61603</if_sid>` (Sysmon EID 1 parent) + `<field win.eventdata.image>` regex path
+  - Đúng: `<if_group>sysmon_event1</if_group>` + `<field win.eventdata.originalFileName>` regex
+- **Rule 100108** (T1547.001 Run Key) — Session 02
+  - Sai (thử nhiều): `<if_sid>61615</if_sid>`, `<if_group>sysmon_event_13</if_group>`, `<if_sid>92300</if_sid>` — không fire cái nào
+  - Đúng: `<if_sid>92302</if_sid>` — chain từ built-in rule CỤ THỂ đã fire trên event đó
+
+**Root cause có thể**:
+1. Wazuh rule engine ưu tiên **child-of-most-specific-parent** khi có nhiều rule cùng chain.
+2. Khi rule con built-in ĐÃ fire với alert cụ thể, rule custom `<if_sid>` cùng parent nhưng ít specific hơn có thể bị "consumed" — không được evaluate.
+3. `<if_group>` không đảm bảo trigger cho mọi event trong group; phụ thuộc rule engine internal.
+
+**Best practice (rút ra)**:
+
+| Tình huống | Approach khuyến nghị |
+|---|---|
+| Có built-in rule đã match event | **Chain từ built-in rule đó** (`<if_sid>Nxxxxx</if_sid>`), escalate level + thêm MITRE tag |
+| Không có built-in nào match, cần rule mới toàn diện | Dùng `<if_group>sysmon_event_N</if_group>` + field constraint chặt, **luôn test bằng cách bỏ field trước** |
+| Rule không fire dù chain đúng | Kiểm tra rule đã load: `curl -sk /rules?rule_ids=Nxxxxx` — nếu `enabled` OK thì regex chưa match |
+
+### 9.2. Bug pattern #2 — Backslash escaping trong regex Windows path
+
+**Triệu chứng**: Regex trên `win.eventdata.image`, `win.eventdata.targetObject`, `win.eventdata.commandLine` (chứa path Windows) không match dù Python regex tương tự lại match.
+
+**Ví dụ**:
+- Field value trong Wazuh Indexer (JSON display): `"HKU\\S-1-5-...\\SOFTWARE\\..."` — nhìn có double backslash
+- Field value **thực tế** trong rule engine: đôi khi single, đôi khi double — phụ thuộc decoder
+
+**Best practice**:
+
+1. **Tránh backslash matching nếu có thể**. Dùng field không có path (VD `originalFileName` chỉ có `powershell.exe`, không có `C:\Windows\...\powershell.exe`).
+2. **Nếu bắt buộc match backslash**: dùng convention của built-in rule cùng loại:
+   - Rule 0800-sysmon_id_1 dùng `\\\\` (4 backslash XML = matches 2 literal backslashes)
+   - Rule 0860-sysmon_id_13 dùng `\\\\` tương tự
+3. **Alternative**: dùng `.` hoặc `.{1,3}` thay backslash:
+   ```xml
+   <field name="win.eventdata.targetObject" type="pcre2">
+     (?i)CurrentVersion.{1,3}(Run|RunOnce).{1,3}
+   </field>
+   ```
+   → Match cả `\CurrentVersion\Run\` và `\\CurrentVersion\\Run\\` mà không cần lo escaping.
+
+### 9.3. Debug workflow khuyến nghị khi rule không fire
+
+```
+1. Verify event có trong indexer chưa
+   → Query wazuh-alerts-* với timestamp range, filter data.win.system.eventID
+   → Nếu KHÔNG có event: sensor / Sysmon chưa capture, hoặc agent chưa ship
+
+2. Verify rule đã load
+   → curl -sk -H "Authorization: Bearer $TOKEN" \
+       "https://localhost:55000/rules?rule_ids=100xxx"
+   → Kiểm tra "status": "enabled", pattern đúng như viết
+
+3. Đơn giản hoá rule dần dần
+   → Bước 1: chỉ `<if_group>sysmon_event_N</if_group>` — nếu fire → chain OK
+   → Bước 2: thêm 1 field constraint — nếu vẫn fire → constraint OK
+   → Bước 3: thêm regex — nếu KHÔNG fire → regex sai (kiểm tra XML escape)
+
+4. Chain từ built-in rule đã fire
+   → Query indexer xem rule ID nào ĐÃ fire trên event → `<if_sid>` từ rule đó
+   → Đây là fallback an toàn nhất
+
+5. Verify với wazuh-logtest (interactive REPL)
+   → sudo /var/ossec/bin/wazuh-logtest
+   → Paste raw log; xem Phase 3 (rule match) trả về gì
+   → Chú ý: event JSON phải có `decoded_as: windows_eventchannel`, không phải `json`,
+     nếu không chain 60000 → 60004 → 61600 → 61603 sẽ đứt.
+
+6. Restart manager sau MỖI thay đổi rule
+   → systemctl restart wazuh-manager
+   → Chờ ≥4s trước khi trigger event test
+```
+
+### 9.4. Vàng — nguyên tắc "chain from working built-in"
+
+Sau khi debug 2 session và mất ~1h/rule, bài học **cứng**:
+
+> **Luôn ưu tiên chain `<if_sid>N</if_sid>` từ 1 built-in rule ĐÃ verified fire trên event của bạn, escalate level thay vì viết rule độc lập.**
+
+Ưu điểm:
+- Built-in rule đã lo phần chain (60000 → 60004 → 61600 → 61615 → …), regex path, decoder edge case
+- Rule custom chỉ cần: escalate level + gán MITRE tag + custom description
+- Test cycle nhanh: 1-2 phút thay vì 30-60 phút
+
+Nhược điểm:
+- Coverage phụ thuộc built-in rule cụ thể (VD: 92302 chỉ bắt `reg.exe`, không bắt PowerShell/regedit)
+- Cần rule con thứ 2 cho coverage rộng hơn (VD rule 100118 supplemental)
+
+### 9.5. Tracking table — rule custom nào cần rule con supplemental
+
+| Rule chính | MITRE | Chain from | Coverage gap | Rule con supplemental |
+|---|---|---|---|---|
+| 100101 | T1059.001 | `<if_group>sysmon_event1</if_group>` + originalFileName | PS spawn không có metadata → miss | 100111 (không có nhưng có thể bổ sung) |
+| 100108 | T1547.001 | `<if_sid>92302</if_sid>` (reg.exe only) | PowerShell/regedit/wmic → miss | 100118 (đề xuất — chain từ 92300 với image regex khác) |
+| ... (mỗi rule sau Phase 6 test → điền vào) | | | | |
+
+Nếu bạn viết rule custom mới, **add entry vào bảng này** trước khi close session.
