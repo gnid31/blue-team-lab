@@ -4,7 +4,7 @@
 
 ---
 
-## 1. Incident Identification (NIST §3.2.7)
+## 1. Incident Identification (NIST §3.2.5)
 
 | Field | Value |
 |---|---|
@@ -17,7 +17,7 @@
 
 ---
 
-## 2. Incident Categorization (NIST §2.1)
+## 2. Incident Categorization (NIST §3.2.1)
 
 | Field | Value |
 |---|---|
@@ -139,7 +139,7 @@ Không SYSTEM privilege → giảm severity chút. Nếu `RunLevel=HighestAvaila
 
 ---
 
-## 6. Scope (NIST §3.2.7)
+## 6. Scope (NIST §3.2.4)
 
 ### 6.1. Affected systems
 
@@ -177,7 +177,7 @@ Không SYSTEM privilege → giảm severity chút. Nếu `RunLevel=HighestAvaila
 
 ---
 
-## 7. Containment, Eradication, Recovery (NIST §3.3, §3.4)
+## 7. Containment, Eradication, Recovery (NIST §3.3)
 
 ### 7.1. Containment strategy
 
@@ -208,7 +208,7 @@ Không SYSTEM privilege → giảm severity chút. Nếu `RunLevel=HighestAvaila
 
 ---
 
-## 8. Post-Incident Activity (NIST §3.5)
+## 8. Post-Incident Activity (NIST §3.4)
 
 ### 8.1. Lessons learned
 
@@ -244,7 +244,7 @@ Xem `docs/04-detection-rules.md` §9 (Appendix — Rule debugging lessons) để
 
 ---
 
-## 9. Communications Log (NIST §2.3.4)
+## 9. Communications Log (NIST §3.2.7)
 
 *Simulation — no real notification chain.*
 

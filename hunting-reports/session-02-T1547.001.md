@@ -4,7 +4,7 @@
 
 ---
 
-## 1. Incident Identification (NIST §3.2.7)
+## 1. Incident Identification (NIST §3.2.5)
 
 | Field | Value |
 |---|---|
@@ -17,7 +17,7 @@
 
 ---
 
-## 2. Incident Categorization (NIST §2.1)
+## 2. Incident Categorization (NIST §3.2.1)
 
 | Field | Value |
 |---|---|
@@ -132,7 +132,7 @@ Note: HKCU (per-user hive) trong Sysmon log được represent bằng **HKU\<Use
 
 ---
 
-## 6. Scope (NIST §3.2.7)
+## 6. Scope (NIST §3.2.4)
 
 ### 6.1. Affected systems
 
@@ -173,7 +173,7 @@ Note: HKCU (per-user hive) trong Sysmon log được represent bằng **HKU\<Use
 
 ---
 
-## 7. Containment, Eradication, Recovery (NIST §3.3, §3.4)
+## 7. Containment, Eradication, Recovery (NIST §3.3)
 
 ### 7.1. Containment strategy
 
@@ -204,7 +204,7 @@ Note: HKCU (per-user hive) trong Sysmon log được represent bằng **HKU\<Use
 
 ---
 
-## 8. Post-Incident Activity (NIST §3.5)
+## 8. Post-Incident Activity (NIST §3.4)
 
 ### 8.1. Lessons learned
 
@@ -241,7 +241,7 @@ Note: HKCU (per-user hive) trong Sysmon log được represent bằng **HKU\<Use
 
 ---
 
-## 9. Communications Log (NIST §2.3.4)
+## 9. Communications Log (NIST §3.2.7)
 
 *Simulation — no real notification chain.*
 

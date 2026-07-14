@@ -1,12 +1,30 @@
 # Incident / Hunting Report — [ID]
 
-> Format: aligned to **NIST SP 800-61r2** (Computer Security Incident Handling Guide) with hunting-oriented adaptations.
+> Format: aligned to **NIST SP 800-61 Rev. 2** (Computer Security Incident Handling Guide) with hunting-oriented adaptations.
 >
 > Field name → NIST section reference.
 
+## NIST SP 800-61r2 section mapping
+
+Cross-reference giữa section trong report này và section chính thức của NIST SP 800-61r2:
+
+| Report section | NIST §ref | NIST section title |
+|---|---|---|
+| 1. Incident Identification | §3.2.5 | Incident Documentation |
+| 2. Incident Categorization | §3.2.1 | Attack Vectors |
+| 3. Incident Prioritization | §3.2.6 | Incident Prioritization |
+| 4. Detection & Analysis | §3.2 | Detection and Analysis (parent) |
+| 5. Chronology / Timeline | §3.2.5 | Incident Documentation |
+| 6. Scope | §3.2.4 | Incident Analysis |
+| 7. Containment, Eradication, Recovery | §3.3 | Containment, Eradication, and Recovery |
+| 8. Post-Incident Activity | §3.4 | Post-Incident Activity |
+| 9. Communications Log | §3.2.7 | Incident Notification |
+
+Source: https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-61r2.pdf
+
 ---
 
-## 1. Incident Identification (NIST §3.2.7)
+## 1. Incident Identification (NIST §3.2.5)
 
 | Field | Value |
 |---|---|
@@ -19,7 +37,7 @@
 
 ---
 
-## 2. Incident Categorization (NIST §2.1)
+## 2. Incident Categorization (NIST §3.2.1)
 
 | Field | Value |
 |---|---|
@@ -111,7 +129,7 @@ Chronological reconstruction từ raw log:
 
 ---
 
-## 6. Scope (NIST §3.2.7)
+## 6. Scope (NIST §3.2.4)
 
 ### 6.1. Affected systems
 
@@ -151,7 +169,7 @@ Chronological reconstruction từ raw log:
 
 ---
 
-## 7. Containment, Eradication, Recovery (NIST §3.3, §3.4)
+## 7. Containment, Eradication, Recovery (NIST §3.3)
 
 ### 7.1. Containment strategy
 
@@ -181,7 +199,7 @@ Chronological reconstruction từ raw log:
 
 ---
 
-## 8. Post-Incident Activity (NIST §3.5)
+## 8. Post-Incident Activity (NIST §3.4)
 
 ### 8.1. Lessons learned
 
@@ -204,7 +222,7 @@ Chronological reconstruction từ raw log:
 
 ---
 
-## 9. Communications Log (NIST §2.3.4)
+## 9. Communications Log (NIST §3.2.7)
 
 | Timestamp | To/From | Channel | Content summary |
 |---|---|---|---|
