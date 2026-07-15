@@ -76,7 +76,7 @@ POST /wazuh-alerts-*/_search
 }
 ```
 
-**Dashboard KQL** (cross-platform):
+**Dashboard DQL** (cross-platform):
 ```
 rule.mitre.id : "T1087.001"
 ```

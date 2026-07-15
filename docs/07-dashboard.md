@@ -1,6 +1,128 @@
 # Phase 7 — Custom Dashboards (Wazuh Dashboard GUI)
 
 > **3 dashboard persona-based**. Ưu tiên GUI; CLI section 8.
+>
+> **Verified on**: Wazuh 4.9.2 + OpenSearch Dashboards **2.13.0** (query `/api/status` để xác nhận version của bạn).
+
+---
+
+## Filter & Query — cách dùng đúng trong OpenSearch Dashboards 2.13
+
+Section này gộp thành **1 chỗ** để tránh lặp trong từng viz. Đọc kỹ trước khi build.
+
+### F.1. Query language
+
+**DQL (Dashboards Query Language)** — mặc định. Không phải KQL (Kibana). Cú pháp gần giống nhưng có khác biệt.
+
+Toggle DQL / Lucene: ở **query bar** (thanh search bar trên đầu Discover / Visualize / Dashboard) có button nhỏ **"DQL"** — click để chuyển sang Lucene nếu cần.
+
+### F.2. DQL syntax cần nhớ
+
+```
+field : value                    # single value match
+field : "value with space"       # quote nếu có space
+field : (v1 or v2 or v3)         # multiple values (case-insensitive keyword or/and/not)
+field : *                        # exists (non-null)
+NOT field : value                # negation
+field1 : v1 and field2 : v2      # combine AND
+field.subfield : value           # dotted path OK
+field : 100*                     # wildcard (chỉ với keyword field, không phải text field)
+field > 100                      # range (chỉ với numeric field)
+field >= "2026-07-13"            # date range
+```
+
+### F.3. Field type quan trọng cần biết
+
+| Field | Type | DQL query mẫu |
+|---|---|---|
+| `rule.id` | **keyword (string)** | `rule.id : "100100"` hoặc `rule.id : 100100` (không quote OK), wildcard `rule.id : 1001*` |
+| `rule.level` | **long (integer)** | `rule.level >= 12` |
+| `agent.name` | keyword | `agent.name : "win-ep-01"` |
+| `rule.mitre.id` | keyword | `rule.mitre.id : "T1059.001"` |
+| `@timestamp` | date | `@timestamp >= "now-24h"` |
+| `data.win.eventdata.commandLine` | text (searchable) | `data.win.eventdata.commandLine : *EncodedCommand*` |
+| `data.audit.exe` | keyword | `data.audit.exe : "/usr/bin/cat"` |
+
+Verify field type: **Dashboard management → Index patterns → chọn pattern → tab Fields** → cột "Type".
+
+### F.4. 2 cách filter data — chọn cái nào?
+
+**Cách 1: DQL trong Query Bar (recommended cho phức tạp / nhiều value)**
+
+Query bar = thanh dài trên đầu, có placeholder "DQL". Gõ trực tiếp:
+
+```
+rule.id : (100100 or 100101 or 100102 or 100104 or 100105 or 100106 or 100107 or 100108 or 100109 or 100112 or 100115 or 100119 or 100120)
+```
+
+Enter → filter apply ngay. Query lưu vào URL, có thể share.
+
+**Ưu**: gọn, share được, dễ edit.
+**Nhược**: cần biết cú pháp DQL.
+
+**Cách 2: "Add filter" button (GUI, recommended cho single condition)**
+
+Click **`+ Add filter`** (nút cạnh query bar, có icon dấu cộng) → mở modal:
+
+```
+┌─── Edit filter ─────────────────────────────┐
+│ Field:      [ rule.id            ▼ ]         │
+│ Operator:   [ is one of          ▼ ]         │
+│ Values:     [ 100100 ⓧ ] [100101 ⓧ] [+ ...] │
+│             (gõ value, Enter để add chip)   │
+│                                              │
+│ □ Custom label (optional):                   │
+│   [ Custom rules 100XXX               ]      │
+│                                              │
+│ [ Edit query DSL ▼ ]  [ Cancel ] [ Save ]   │
+└──────────────────────────────────────────────┘
+```
+
+Operator options trong OSD 2.13:
+
+- `is`
+- `is not`
+- **`is one of`** ← dùng cho multi-value discrete
+- `is not one of`
+- `exists` (field non-null)
+- `does not exist`
+- `is between` (range)
+- `is not between`
+
+Với **13 rule ID** → dùng "is one of" phải gõ 13 lần Enter → tedious. Nên dùng Cách 1 (DQL query bar).
+
+**Ưu Cách 2**: không cần biết cú pháp, có validation.
+**Nhược**: chậm với nhiều value, khó edit sau khi save.
+
+### F.5. Cách shortcut cho custom rules 100100-100120
+
+Vì `rule.id` là keyword, có 3 cách filter tất cả custom rules:
+
+| Cách | DQL query | Bắt được | Ghi chú |
+|---|---|---|---|
+| **Wildcard đơn** | `rule.id : 1001*` | Tất cả `1001xx` (100100-100199) | **Ngắn gọn nhất**, khớp scope custom range đúng |
+| Explicit OR | `rule.id : (100100 or 100101 or ...)` | Chỉ ID liệt kê | An toàn nhất khi range không liên tục |
+| Filter modal "is one of" | (Add filter → is one of → gõ từng ID) | Chỉ ID nhập | Dùng khi ít value và cần GUI |
+
+**Khuyến nghị cho dự án này**: dùng `rule.id : 1001*` — vì convention của repo là 100100-100199 → wildcard match đúng scope.
+
+### F.6. Filter vs "Buckets → Split" trong Visualize builder
+
+Đừng nhầm 2 chỗ khác nhau:
+
+- **Top query bar / Add filter**: filter DATA đưa vào visualization (mọi document phải match).
+- **Buckets → Split rows / Split series / X-axis**: chia data thành nhóm để aggregate (Terms, Date Histogram, Range, ...).
+
+VD: muốn "bar chart của 13 custom rule".
+- Cách đúng: filter `rule.id : 1001*` ở query bar + bucket Terms field `rule.id` size 15
+- Cách sai: bỏ filter, chỉ dùng bucket Terms — sẽ show top 15 rule bất kỳ (mostly built-in noise)
+
+### F.7. Global (dashboard-wide) vs Panel-level filter
+
+- Filter đặt trên **Dashboard** → apply cho **mọi panel** trong dashboard đó.
+- Filter đặt trên **Visualize** (edit 1 viz) → chỉ áp cho viz đó, được **lưu vào saved object của viz**.
+
+Nếu build 3 dashboards trong section 2-4 dưới, filter "custom rule range" nên đặt ở **panel level (Visualize)** vì mỗi dashboard cần scope khác nhau.
 
 ---
 
@@ -115,7 +237,11 @@ Không có ISO/NIST standard riêng cho SOC dashboard, nhưng các reference:
    - Terms — field `rule.id` — size 20 — Custom label "Rule ID"
 5. Add sub-metric (top-right corner "+" trong metric panel):
    - **Max** → field `@timestamp` → Custom label "Last fire"
-6. Add filter: `rule.id : (100100 or 100101 or 100102 or 100104 or 100105 or 100106 or 100107 or 100108 or 100109 or 100112 or 100115 or 100119 or 100120)`
+6. Filter custom rule range — trong **query bar** trên đầu, gõ:
+   ```
+   rule.id : 1001*
+   ```
+   Enter. (Xem section F.5 để hiểu tại sao wildcard tốt hơn "is one of".)
 7. Save: **`BTL-A1 Custom Rule Performance`**
 
 ### A2 — MITRE ATT&CK Coverage (heatmap)
@@ -141,9 +267,10 @@ Không có ISO/NIST standard riêng cho SOC dashboard, nhưng các reference:
 
 1. Visualize → **Line**
 2. Index pattern: `wazuh-alerts-*`
-3. X-axis: Date Histogram — `@timestamp` — Auto
-4. Split series: Terms — `rule.id` — size 15 — apply same filter A1
-5. Save: **`BTL-A3 Custom Rule Fires Timeline`**
+3. Filter query bar: `rule.id : 1001*` (giống A1)
+4. X-axis: Date Histogram — `@timestamp` — Auto
+5. Split series: Terms — `rule.id` — size 15
+6. Save: **`BTL-A3 Custom Rule Fires Timeline`**
 
 ### A4 — Coverage Gap (table)
 
@@ -153,10 +280,12 @@ Không có ISO/NIST standard riêng cho SOC dashboard, nhưng các reference:
 
 1. Visualize → **Data table**
 2. Index pattern: `wazuh-alerts-*`
-3. Buckets → Split rows: Terms — `rule.mitre.id` — size 30
-4. Filter: `rule.id < 100000` — chỉ built-in
+3. Filter query bar: `NOT rule.id : 1001*` — loại trừ custom rule (chỉ giữ built-in)
+4. Buckets → Split rows: Terms — `rule.mitre.id` — size 30
 5. Sort desc by Count
 6. Save: **`BTL-A4 Coverage Gap (Built-in vs Custom)`**
+
+> **Note**: `rule.id < 100000` KHÔNG work vì `rule.id` là **keyword** (không phải numeric). Phải dùng `NOT rule.id : 1001*` hoặc "is not one of" filter modal.
 
 **Cách dùng**: so sánh với A2 — technique nào có trong A4 mà không có trong A2 = gap → cần viết rule custom mới.
 
@@ -168,8 +297,8 @@ Không có ISO/NIST standard riêng cho SOC dashboard, nhưng các reference:
 
 1. Visualize → **Vertical Bar**
 2. Index pattern: `wazuh-alerts-*`
-3. X-axis: Terms — `rule.level` — order asc — size 16 — Custom label "Level"
-4. Filter: cùng filter A1 (chỉ custom rule)
+3. Filter query bar: `rule.id : 1001*` (chỉ custom rule)
+4. X-axis: Terms — `rule.level` — order asc — size 16 — Custom label "Level"
 5. Save: **`BTL-A5 Rule Level Distribution`**
 
 ### Assemble Dashboard A
@@ -220,12 +349,11 @@ Không có ISO/NIST standard riêng cho SOC dashboard, nhưng các reference:
 
 1. Visualize → **Data table**
 2. Index pattern: `enrichment-verdicts-*`
-3. Filter: `verdict_label : "malicious"` (chỉ malicious)
+3. Filter query bar: `verdict_label : "malicious"`
 4. Split rows:
    - Bucket 1: Terms — `ioc_value` — size 20
    - Bucket 2: Terms — `provider` — size 3
    - Bucket 3: Terms — `link` — size 1 (để hiển thị link)
-   - Bucket 4: Max — `score` (nếu là numeric)
 5. Save: **`BTL-B2 Top Malicious IOCs`**
 
 **Trick clickable link**: OpenSearch Dashboards **field format** — Index patterns → enrichment-verdicts → field `link` → set format = **Url** → template `{{value}}`. Sau đó bảng sẽ render link click được.
@@ -238,9 +366,9 @@ Không có ISO/NIST standard riêng cho SOC dashboard, nhưng các reference:
 
 1. Visualize → **Line**
 2. Index pattern: `wazuh-alerts-*`
-3. X-axis: Date Histogram — `@timestamp` — 30 min
-4. Split series: Terms — `agent.name` — size 5
-5. Filter: `rule.level >= 7` (chỉ alert đáng chú ý)
+3. Filter query bar: `rule.level >= 7` (chỉ alert đáng chú ý — `rule.level` là numeric nên `>=` work)
+4. X-axis: Date Histogram — `@timestamp` — 30 min
+5. Split series: Terms — `agent.name` — size 5
 6. Time picker: Last 24h
 7. Save: **`BTL-B3 Alerts by Agent`**
 
@@ -266,12 +394,11 @@ Không có ISO/NIST standard riêng cho SOC dashboard, nhưng các reference:
 
 1. Visualize → **Data table**
 2. Index pattern: `wazuh-alerts-*`
-3. Split rows:
-   - Bucket 1: Terms — `rule.mitre.id` — size 10
-   - Bucket 2: Cardinality — `agent.name` (count unique agents)
-4. Filter: `rule.level >= 7`
-5. Sort desc by cardinality → technique có unique agents ≥ 2 = correlation signal
-6. Save: **`BTL-B5 Cross-agent Correlation`**
+3. Filter query bar: `rule.level >= 7`
+4. Metric → **Add** → **Unique Count** → field `agent.name` → Custom label "Unique agents"
+5. Buckets → Split rows: Terms — `rule.mitre.id` — size 20 — Order by "Unique agents" metric desc
+6. Sort → technique có unique agents ≥ 2 = correlation signal
+7. Save: **`BTL-B5 Cross-agent Correlation`**
 
 ### Assemble Dashboard B
 

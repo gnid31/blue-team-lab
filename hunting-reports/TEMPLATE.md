@@ -94,7 +94,7 @@ POST /wazuh-alerts-*/_search
 { ... }
 ```
 
-**Dashboard KQL**:
+**Dashboard DQL**:
 ```
 rule.id : "..." AND @timestamp >= "..."
 ```

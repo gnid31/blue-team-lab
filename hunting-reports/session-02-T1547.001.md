@@ -76,7 +76,7 @@ POST /wazuh-alerts-*/_search
 }
 ```
 
-**Dashboard KQL**:
+**Dashboard DQL**:
 ```
 rule.id : "100108" AND @timestamp >= "2026-07-13T14:09:30Z"
 ```
