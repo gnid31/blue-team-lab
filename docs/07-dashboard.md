@@ -215,6 +215,42 @@ Trước khi build, phân biệt **SOC L1** và **DFIR** — hai vai trò rất 
 | `wazuh-alerts-*` | `@timestamp`, `rule.id/level/description/mitre.id`, `agent.name`, `data.win.system.eventID`, `data.win.eventdata.*`, `data.audit.*` | Cả 3 |
 | `enrichment-verdicts-*` | `ioc_value`, `verdict_label`, `provider`, `score`, `link`, `alert_id` | DFIR (IOC pivot), Executive (chart) |
 
+### 1.5. Naming convention (18 saved objects tổng)
+
+Prefix `<Group> - <Descriptive Name>` — dấu `-` để "Add" panel sort alphabetically theo group.
+
+**Dashboards** (3):
+- `Blue Team Lab - SOC L1 Alert Triage Console`
+- `Blue Team Lab - DFIR Incident Investigation Workbench`
+- `Blue Team Lab - Threat Detection Program Overview`
+
+**SOC L1 Visualizations** (7):
+- `SOC - Alert Volume (Last 15 min)` — Metric
+- `SOC - Critical Alerts Unacknowledged (Last 15 min)` — Metric
+- `SOC - Active Endpoints` — Metric (unique count)
+- `SOC - Top Firing Rule (Last 4h)` — Metric (top hit)
+- `SOC - Triage Queue (High-Severity Alerts)` — Saved Search
+- `SOC - Rule Activity Trend (Last 4h)` — Vertical Bar (stacked)
+- `SOC - Endpoint Heartbeat Status` — Data Table
+
+**DFIR Visualizations** (7):
+- `DFIR - Investigation Scope Filters` — Markdown
+- `DFIR - Incident Event Timeline` — Saved Search
+- `DFIR - Process Execution Lineage (Sysmon EID 1)` — Data Table
+- `DFIR - Network Connections (Sysmon EID 3)` — Data Table
+- `DFIR - File & Registry Modifications (Sysmon EID 11/13)` — Data Table
+- `DFIR - User Activity Across Endpoints` — Data Table
+- `DFIR - IOC Threat Intel Cross-Reference` — Data Table
+
+**Executive Visualizations** (7 — optional):
+- `Exec - Total Alerts (Last 7 days)` — Metric
+- `Exec - Unique MITRE Techniques Detected` — Metric
+- `Exec - Endpoints Monitored` — Metric
+- `Exec - Threat Intel Verdicts Written` — Metric
+- `Exec - MITRE ATT&CK Coverage Heatmap` — Heat Map
+- `Exec - Alert Volume Trend (Last 7 days)` — Line
+- `Exec - Threat Intel Verdict Distribution` — Pie (donut)
+
 ---
 
 ## 2. Dashboard SOC1 — Real-time Triage
@@ -257,7 +293,7 @@ Trước khi build, phân biệt **SOC L1** và **DFIR** — hai vai trò rất 
 4. Query bar: (empty — tất cả alerts)
 5. Time picker: **Last 15 minutes**
 6. Options → Font size: **60** (lớn, dễ scan)
-7. Save: **`BTL-SOC1-K1 Alerts 15m`**
+7. Save: **`SOC - Alert Volume (Last 15 min)`**
 
 ### SOC1-K2 — Critical unacknowledged (level ≥ 12, last 15 min)
 
@@ -272,7 +308,7 @@ Trước khi build, phân biệt **SOC L1** và **DFIR** — hai vai trò rất 
 3. Query bar: `rule.level >= 12`
 4. Time picker: **Last 15 minutes**
 5. Options → Font size 60, color **red** (Options → Metric → Color ranges: ≥1 = danger)
-6. Save: **`BTL-SOC1-K2 Critical Unack 15m`**
+6. Save: **`SOC - Critical Alerts Unacknowledged (Last 15 min)`**
 
 ### SOC1-K3 — Distinct agents active (last 15 min)
 
@@ -285,7 +321,7 @@ Trước khi build, phân biệt **SOC L1** và **DFIR** — hai vai trò rất 
 3. Metric aggregation: **Unique Count** (Cardinality) — field `agent.name`
 4. Time picker: Last 15 min
 5. Custom label: "Agents active"
-6. Save: **`BTL-SOC1-K3 Agents Active`**
+6. Save: **`SOC - Active Endpoints`**
 
 ### SOC1-K4 — Rule ID noisiest last 4h
 
@@ -298,7 +334,7 @@ Trước khi build, phân biệt **SOC L1** và **DFIR** — hai vai trò rất 
 3. Metric aggregation: **Top Hit** — field `rule.id`, size 1, order by Count desc
 4. Time picker: Last 4 hours
 5. Custom label: "Noisiest rule (4h)"
-6. Save: **`BTL-SOC1-K4 Noisy Rule`**
+6. Save: **`SOC - Top Firing Rule (Last 4h)`**
 
 ### SOC1-Q — Alert Queue (data table, workspace)
 
@@ -319,7 +355,7 @@ Trước khi build, phân biệt **SOC L1** và **DFIR** — hai vai trò rất 
    - Bucket 5: Terms — `rule.mitre.id` — size 1
    - Bucket 6: Terms — `rule.description` — size 1
 7. Options tab → **Show partial rows: ON**
-8. Save: **`BTL-SOC1-Q Alert Queue`**
+8. Save: **`SOC - Triage Queue (High-Severity Alerts)`**
 
 **Alternative tốt hơn — Saved Search + Discover embed** (recommend):
 
@@ -329,7 +365,7 @@ Trước khi build, phân biệt **SOC L1** và **DFIR** — hai vai trò rất 
 4. Time picker: Last 4 hours
 5. Columns to display (bấm + cạnh field trong sidebar): `agent.name`, `rule.id`, `rule.level`, `rule.mitre.id`, `rule.description`
 6. Sort: `rule.level` desc, `@timestamp` desc
-7. **Save** search → title **`BTL-SOC1-Q Alert Queue (saved search)`**
+7. **Save** search → title **`SOC - Triage Queue (High-Severity Alerts)`**
 8. Sau đó add saved search vào dashboard qua Add → **Saved Search** tab
 
 Saved Search dùng cho SOC1 tốt hơn Data table vì:
@@ -351,7 +387,7 @@ Saved Search dùng cho SOC1 tốt hơn Data table vì:
 5. Split series: Terms — `rule.id` — size 10 — Order Count desc
 6. Query bar: `rule.level >= 5`
 7. Options → **Legend position: right**
-8. Save: **`BTL-SOC1-R Rule Fires 4h`**
+8. Save: **`SOC - Rule Activity Trend (Last 4h)`**
 
 ### SOC1-A — Agent Last-Seen (silent detector)
 
@@ -367,21 +403,25 @@ Saved Search dùng cho SOC1 tốt hơn Data table vì:
    - Add **Max** — field `@timestamp` — Custom label "Last event"
    - Add **Count** — Custom label "Alerts (24h)"
 5. Buckets → Split rows: Terms — `agent.name` — size 20 — Order by Max @timestamp asc (agent cũ nhất lên trên = silent nhất)
-6. Save: **`BTL-SOC1-A Agent Last-Seen`**
+6. Save: **`SOC - Endpoint Heartbeat Status`**
 
 Cách dùng: agent nào có "Last event" > 1h ago = suspicious, cần check `systemctl status wazuh-agent` trên VM đó.
 
 ### Assemble Dashboard SOC1
 
 1. Menu → **Dashboard** → Create
-2. Add:
-   - 4 metric: **BTL-SOC1-K1..K4** (row trên, mỗi cái rộng 12/48 grid = 25%)
-   - Saved search **BTL-SOC1-Q** (row 2, full width, height 20/48)
-   - **BTL-SOC1-R** (row 3, rộng 24/48)
-   - **BTL-SOC1-A** (row 3, rộng 24/48)
+2. Add (search "SOC -" trong panel Add):
+   - 4 metric panels (row top, mỗi cái rộng 12/48 grid = 25%):
+     - `SOC - Alert Volume (Last 15 min)`
+     - `SOC - Critical Alerts Unacknowledged (Last 15 min)`
+     - `SOC - Active Endpoints`
+     - `SOC - Top Firing Rule (Last 4h)`
+   - `SOC - Triage Queue (High-Severity Alerts)` (saved search, row 2, full width, height 20/48)
+   - `SOC - Rule Activity Trend (Last 4h)` (row 3, rộng 24/48)
+   - `SOC - Endpoint Heartbeat Status` (row 3, rộng 24/48)
 3. Time picker: **Last 4 hours**
 4. **Auto-refresh: 30 seconds** (click nút refresh nhỏ trên đầu → set)
-5. Save with time: **`Blue Team Lab — SOC1 Real-time Triage`**
+5. Save with time: **`Blue Team Lab - SOC L1 Alert Triage Console`**
 
 ---
 
@@ -454,7 +494,7 @@ Cách dùng: agent nào có "Last event" > 1h ago = suspicious, cần check `sys
 3. Columns (bấm + cạnh field): `@timestamp`, `agent.name`, `data.win.system.eventID`, `rule.id`, `data.win.eventdata.image`, `data.win.eventdata.commandLine`, `data.win.eventdata.user`
 4. Sort: `@timestamp` **ascending** (chronological cho reconstruction)
 5. Query: (empty — filter apply từ dashboard-level)
-6. Save search: **`BTL-DFIR-T Event Timeline`**
+6. Save search: **`DFIR - Incident Event Timeline`**
 7. Trong dashboard, Add → Saved Search tab → chọn saved search này
 
 ### DFIR-P — Process Tree (Sysmon EID 1)
@@ -471,7 +511,7 @@ Cách dùng: agent nào có "Last event" > 1h ago = suspicious, cần check `sys
    - Bucket 1: Terms — `data.win.eventdata.parentImage` — size 10 — Custom label "Parent"
    - Bucket 2: Terms — `data.win.eventdata.image` — size 10 — Custom label "Child"
    - Bucket 3: Terms — `data.win.eventdata.user` — size 3 — Custom label "User"
-6. Save: **`BTL-DFIR-P Process Tree`**
+6. Save: **`DFIR - Process Execution Lineage (Sysmon EID 1)`**
 
 Cách dùng: xem row nào có `parentImage: sshd-session.exe` + `image: powershell.exe` = attacker shell.
 
@@ -488,7 +528,7 @@ Cách dùng: xem row nào có `parentImage: sshd-session.exe` + `image: powershe
    - Bucket 1: Terms — `data.win.eventdata.image` — size 10 — "Process"
    - Bucket 2: Terms — `data.win.eventdata.destinationIp` — size 20 — "Destination IP"
    - Bucket 3: Terms — `data.win.eventdata.destinationPort` — size 10 — "Port"
-5. Save: **`BTL-DFIR-N Network Connections`**
+5. Save: **`DFIR - Network Connections (Sysmon EID 3)`**
 
 > **Prereq**: Sysmon SwiftOnSecurity default filter EID 3 khá aggressive — nếu bảng rỗng, cần tune Sysmon config include EID 3 rộng hơn.
 
@@ -506,7 +546,7 @@ Cách dùng: xem row nào có `parentImage: sshd-session.exe` + `image: powershe
    - Bucket 2: Terms — `data.win.eventdata.targetFilename` — size 15 — "File" (empty cho EID 13)
    - Bucket 3: Terms — `data.win.eventdata.targetObject` — size 15 — "Registry" (empty cho EID 11)
    - Bucket 4: Terms — `data.win.eventdata.image` — size 5 — "By process"
-5. Save: **`BTL-DFIR-FR File+Registry`**
+5. Save: **`DFIR - File & Registry Modifications (Sysmon EID 11/13)`**
 
 ### DFIR-U — User Activity (grouped)
 
@@ -520,7 +560,7 @@ Cách dùng: xem row nào có `parentImage: sshd-session.exe` + `image: powershe
    - Bucket 1: Terms — `data.win.eventdata.user` — size 10 — "User"
    - Bucket 2: Terms — `agent.name` — size 5 — "Host"
    - Bucket 3: Terms — `rule.mitre.id` — size 10 — "MITRE"
-4. Save: **`BTL-DFIR-U User Activity`**
+4. Save: **`DFIR - User Activity Across Endpoints`**
 
 Filter dashboard-level: `data.win.eventdata.user : *labuser*` → chỉ hiện labuser action.
 
@@ -538,23 +578,23 @@ Filter dashboard-level: `data.win.eventdata.user : *labuser*` → chỉ hiện l
    - Bucket 2: Terms — `provider` — size 3 — "Provider"
    - Bucket 3: Terms — `verdict_label` — size 4 — "Verdict"
    - Bucket 4: Terms — `alert_id` — size 3 — "Alert ID"
-5. Save: **`BTL-DFIR-I IOC Pivot`**
+5. Save: **`DFIR - IOC Threat Intel Cross-Reference`**
 
 Cách dùng: nếu analyst có sẵn IOC hash/IP, filter `ioc_value : "62.60.130.219"` → thấy verdict + alert_id → jump sang DFIR-T timeline với `_id: <alert_id>`.
 
 ### Assemble Dashboard DFIR
 
-1. Dashboard → Create → Add:
-   - **BTL-DFIR-F** (Markdown, row top, full width)
-   - **BTL-DFIR-T** (Saved Search, row 2, full width, height lớn)
-   - **BTL-DFIR-P** (row 3, 16/48 grid)
-   - **BTL-DFIR-N** (row 3, 16/48 grid)
-   - **BTL-DFIR-FR** (row 3, 16/48 grid)
-   - **BTL-DFIR-U** (row 4, 24/48 grid)
-   - **BTL-DFIR-I** (row 4, 24/48 grid)
+1. Dashboard → Create → Add (search "DFIR -" trong panel Add):
+   - `DFIR - Investigation Scope Filters` (Markdown, row top, full width)
+   - `DFIR - Incident Event Timeline` (saved search, row 2, full width, height lớn)
+   - `DFIR - Process Execution Lineage (Sysmon EID 1)` (row 3, 16/48 grid)
+   - `DFIR - Network Connections (Sysmon EID 3)` (row 3, 16/48 grid)
+   - `DFIR - File & Registry Modifications (Sysmon EID 11/13)` (row 3, 16/48 grid)
+   - `DFIR - User Activity Across Endpoints` (row 4, 24/48 grid)
+   - `DFIR - IOC Threat Intel Cross-Reference` (row 4, 24/48 grid)
 2. Time picker: **manual** (analyst set theo incident window; default Last 24 hours)
 3. Auto-refresh: **OFF** (freeze snapshot)
-4. Save: **`Blue Team Lab — DFIR Investigation Workbench`**
+4. Save: **`Blue Team Lab - DFIR Incident Investigation Workbench`**
 
 ---
 
@@ -562,14 +602,19 @@ Cách dùng: nếu analyst có sẵn IOC hash/IP, filter `ioc_value : "62.60.130
 
 **Persona**: recruiter, CISO snapshot. Không phải operational persona nhưng có giá trị để nhúng vào CV/README.
 
-**Layout & GUI**: giữ như bản A→C trước đây — xem section 4 cũ trong `git log` để reference nếu cần build. Tóm tắt panels:
+**Layout**: 4 KPI panels top + MITRE heatmap giữa + 2 chart bottom. Tóm tắt viz names:
 
-- **EXEC-K1..K4**: 4 big number (Total alerts 7d, Unique techniques, Agents monitored, Verdicts written)
-- **EXEC-M**: MITRE ATT&CK Coverage heatmap
-- **EXEC-T**: Timeline last 7d
-- **EXEC-V**: Enrichment Verdict donut
+- **Metric panels** (top row):
+  - `Exec - Total Alerts (Last 7 days)`
+  - `Exec - Unique MITRE Techniques Detected`
+  - `Exec - Endpoints Monitored`
+  - `Exec - Threat Intel Verdicts Written`
+- **Main panels**:
+  - `Exec - MITRE ATT&CK Coverage Heatmap` (rebuild theo cùng logic Dashboard A2 cũ)
+  - `Exec - Alert Volume Trend (Last 7 days)` (single-line không split)
+  - `Exec - Threat Intel Verdict Distribution` (donut)
 
-Save: **`Blue Team Lab — Executive Overview`**.
+Save: **`Blue Team Lab - Threat Detection Program Overview`**.
 
 ---
 
