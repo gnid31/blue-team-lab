@@ -270,15 +270,56 @@ def build_soc():
                                    "customLabel": "Latest high-severity rule"}}]},
              IDX_ALERTS, query="rule.level >= 10")
 
-    save_search("soc-triage-queue", "SOC - Triage Queue (High-Severity Alerts)",
-                IDX_ALERTS,
-                columns=["agent.name", "rule.id", "rule.level", "rule.mitre.id",
-                         "rule.description"],
-                query="rule.level >= 7",
-                sort=[["rule.level", "desc"], ["@timestamp", "desc"]])
+    # Triage Queue — aggregated by rule (dedupe), not raw event list
+    save_viz("soc-triage-queue", "SOC - Triage Queue (Grouped by Rule)",
+             {"type": "table",
+              "params": {"perPage": 25, "showPartialRows": True,
+                          "showMetricsAtAllLevels": True, "showTotal": False,
+                          "totalFunc": "sum",
+                          "sort": {"columnIndex": 3, "direction": "desc"}},
+              "aggs": [
+                  {"id": "1", "enabled": True, "type": "count", "schema": "metric",
+                   "params": {"customLabel": "Count"}},
+                  {"id": "2", "enabled": True, "type": "max", "schema": "metric",
+                   "params": {"field": "@timestamp", "customLabel": "Last seen"}},
+                  {"id": "3", "enabled": True, "type": "cardinality", "schema": "metric",
+                   "params": {"field": "agent.name", "customLabel": "Unique agents"}},
+                  {"id": "4", "enabled": True, "type": "terms", "schema": "bucket",
+                   "params": {"field": "rule.level", "size": 5, "order": "desc",
+                              "orderBy": "1", "customLabel": "Level"}},
+                  {"id": "5", "enabled": True, "type": "terms", "schema": "bucket",
+                   "params": {"field": "rule.mitre.id", "size": 5, "order": "desc",
+                              "orderBy": "1", "customLabel": "MITRE"}},
+                  {"id": "6", "enabled": True, "type": "terms", "schema": "bucket",
+                   "params": {"field": "rule.description", "size": 25, "order": "desc",
+                              "orderBy": "1", "customLabel": "Rule"}},
+              ]},
+             IDX_ALERTS, query="rule.level >= 7")
 
+    # Top MITRE Techniques (new — user request)
+    save_viz("soc-top-mitre", "SOC - Top MITRE Techniques (Last 4h)",
+             {"type": "table",
+              "params": {"perPage": 10, "showPartialRows": True,
+                          "showMetricsAtAllLevels": True, "showTotal": False,
+                          "totalFunc": "sum"},
+              "aggs": [
+                  {"id": "1", "enabled": True, "type": "count", "schema": "metric",
+                   "params": {"customLabel": "Alerts"}},
+                  {"id": "2", "enabled": True, "type": "cardinality", "schema": "metric",
+                   "params": {"field": "agent.name", "customLabel": "Agents"}},
+                  {"id": "3", "enabled": True, "type": "terms", "schema": "bucket",
+                   "params": {"field": "rule.mitre.id", "size": 10, "order": "desc",
+                              "orderBy": "1", "customLabel": "MITRE Technique"}},
+                  {"id": "4", "enabled": True, "type": "terms", "schema": "bucket",
+                   "params": {"field": "rule.mitre.tactic", "size": 5, "order": "desc",
+                              "orderBy": "1", "customLabel": "Tactic"}},
+              ]},
+             IDX_ALERTS, query="rule.level >= 5")
+
+    # Rule Activity Trend — split by rule.description (readable) instead of rule.id
     save_viz("soc-rule-activity-4h", "SOC - Rule Activity Trend (Last 4h)",
-             m_bar("@timestamp", split_field="rule.id", is_date_hist=True, interval="10m"),
+             m_bar("@timestamp", split_field="rule.description", is_date_hist=True,
+                   interval="10m"),
              IDX_ALERTS, query="rule.level >= 5")
 
     save_viz("soc-endpoint-heartbeat", "SOC - Endpoint Heartbeat Status",
@@ -423,6 +464,7 @@ Cần deep-dive 1 alert? → [DFIR Workbench](#/dashboards/view/btl-dfir)
 """
     save_dashboard("btl-soc-l1", "Blue Team Lab - SOC L1 Alert Triage Console",
                    panel_refs=[
+                       # Row 1: 4 KPI panels
                        ("visualization", "soc-alert-volume-15m",
                         {"x": 0, "y": 0, "w": 12, "h": 8}),
                        ("visualization", "soc-critical-unack-15m",
@@ -431,14 +473,19 @@ Cần deep-dive 1 alert? → [DFIR Workbench](#/dashboards/view/btl-dfir)
                         {"x": 24, "y": 0, "w": 12, "h": 8}),
                        ("visualization", "soc-top-firing-rule",
                         {"x": 36, "y": 0, "w": 12, "h": 8}),
-                       ("search", "soc-triage-queue",
-                        {"x": 0, "y": 8, "w": 48, "h": 20}),
+                       # Row 2: Triage Queue (aggregated) — main workspace
+                       ("visualization", "soc-triage-queue",
+                        {"x": 0, "y": 8, "w": 48, "h": 18}),
+                       # Row 3: Top MITRE + Rule Activity
+                       ("visualization", "soc-top-mitre",
+                        {"x": 0, "y": 26, "w": 24, "h": 14}),
                        ("visualization", "soc-rule-activity-4h",
-                        {"x": 0, "y": 28, "w": 24, "h": 12}),
+                        {"x": 24, "y": 26, "w": 24, "h": 14}),
+                       # Row 4: Endpoint Heartbeat
                        ("visualization", "soc-endpoint-heartbeat",
-                        {"x": 24, "y": 28, "w": 24, "h": 12}),
+                        {"x": 0, "y": 40, "w": 48, "h": 12}),
                    ],
-                   markdown_panels=[(soc_md, {"x": 0, "y": 40, "w": 48, "h": 6})],
+                   markdown_panels=[(soc_md, {"x": 0, "y": 52, "w": 48, "h": 6})],
                    time_from="now-4h", time_to="now",
                    refresh_pause=False, refresh_value=30000)
 
