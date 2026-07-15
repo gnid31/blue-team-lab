@@ -254,74 +254,123 @@ def m_pie(field: str, size: int = 5, is_donut: bool = True):
 # ============================================================
 def build_soc():
     print("\n=== SOC L1 Alert Triage Console ===")
-    save_viz("soc-alert-volume-15m", "SOC - Alert Volume (Last 15 min)",
-             m_count("Alerts"), IDX_ALERTS)
-    save_viz("soc-critical-unack-15m", "SOC - Critical Alerts Unacknowledged (Last 15 min)",
-             m_count("Critical"), IDX_ALERTS, query="rule.level >= 12")
-    save_viz("soc-active-endpoints", "SOC - Active Endpoints",
-             m_count("Endpoints", "cardinality", "agent.name"), IDX_ALERTS)
-    save_viz("soc-top-firing-rule", "SOC - Top Firing Rule (Last 4h)",
-             {"type": "metric",
-              "params": {"metric": {"labels": {"show": True},
-                                     "style": {"fontSize": 30}}},
-              "aggs": [{"id": "1", "enabled": True, "type": "top_hits", "schema": "metric",
-                        "params": {"field": "rule.description", "size": 1, "sortField": "@timestamp",
-                                   "sortOrder": "desc", "aggregate": "concat",
-                                   "customLabel": "Latest high-severity rule"}}]},
-             IDX_ALERTS, query="rule.level >= 10")
 
-    # Triage Queue — aggregated by rule (dedupe), not raw event list
-    save_viz("soc-triage-queue", "SOC - Triage Queue (Grouped by Rule)",
+    # ── Row 1: 4 SLA KPI ──────────────────────────────
+    # (1) New critical alerts (last 4h) — với color threshold
+    save_viz("soc-kpi-critical", "SOC - New Critical Alerts (Last 4h)",
+             {"type": "metric",
+              "params": {"metric": {"percentageMode": False, "useRanges": True,
+                                     "colorSchema": "Green to Red",
+                                     "metricColorMode": "Background",
+                                     "colorsRange": [
+                                         {"from": 0, "to": 1},
+                                         {"from": 1, "to": 5},
+                                         {"from": 5, "to": 999}
+                                     ],
+                                     "labels": {"show": True},
+                                     "invertColors": False,
+                                     "style": {"fontSize": 60}}},
+              "aggs": [{"id": "1", "enabled": True, "type": "count", "schema": "metric",
+                        "params": {"customLabel": "Critical (lvl≥12)"}}]},
+             IDX_ALERTS, query="rule.level >= 12")
+
+    # (2) High-severity aging: level≥10, first seen >30 min ago = SLA warning
+    save_viz("soc-kpi-aging", "SOC - Aging High-Severity Alerts",
+             m_count("Aging (lvl≥10, >30m)", "count"),
+             IDX_ALERTS,
+             query='rule.level >= 10 and @timestamp < "now-30m"')
+
+    # (3) Active attack chains: cardinality of MITRE tactic
+    save_viz("soc-kpi-chains", "SOC - Active MITRE Tactics",
+             m_count("Tactics active", "cardinality", "rule.mitre.tactic"),
+             IDX_ALERTS, query="rule.level >= 7")
+
+    # (4) Malicious IOCs today
+    save_viz("soc-kpi-malicious-ioc", "SOC - Malicious IOCs Today",
+             m_count("Malicious IOCs"), IDX_VERDICTS,
+             query='verdict_label : "malicious"')
+
+    # ── Row 2: Notable Events (case-ready grouping per host) ──
+    # SOCFortress principle: group brute-force + successful login + priv-esc
+    # trên cùng host = 1 case
+    save_viz("soc-notable-events",
+             "SOC - Notable Events (Grouped by Rule + Host)",
              {"type": "table",
-              "params": {"perPage": 25, "showPartialRows": True,
+              "params": {"perPage": 20, "showPartialRows": True,
                           "showMetricsAtAllLevels": True, "showTotal": False,
                           "totalFunc": "sum",
-                          "sort": {"columnIndex": 3, "direction": "desc"}},
+                          "sort": {"columnIndex": 4, "direction": "desc"}},
               "aggs": [
                   {"id": "1", "enabled": True, "type": "count", "schema": "metric",
                    "params": {"customLabel": "Count"}},
                   {"id": "2", "enabled": True, "type": "max", "schema": "metric",
                    "params": {"field": "@timestamp", "customLabel": "Last seen"}},
-                  {"id": "3", "enabled": True, "type": "cardinality", "schema": "metric",
-                   "params": {"field": "agent.name", "customLabel": "Unique agents"}},
-                  {"id": "4", "enabled": True, "type": "terms", "schema": "bucket",
-                   "params": {"field": "rule.level", "size": 5, "order": "desc",
-                              "orderBy": "1", "customLabel": "Level"}},
+                  {"id": "3", "enabled": True, "type": "min", "schema": "metric",
+                   "params": {"field": "@timestamp", "customLabel": "First seen"}},
+                  {"id": "4", "enabled": True, "type": "max", "schema": "metric",
+                   "params": {"field": "rule.level", "customLabel": "Max Level"}},
                   {"id": "5", "enabled": True, "type": "terms", "schema": "bucket",
-                   "params": {"field": "rule.mitre.id", "size": 5, "order": "desc",
-                              "orderBy": "1", "customLabel": "MITRE"}},
+                   "params": {"field": "agent.name", "size": 5, "order": "desc",
+                              "orderBy": "1", "customLabel": "Host"}},
                   {"id": "6", "enabled": True, "type": "terms", "schema": "bucket",
                    "params": {"field": "rule.description", "size": 25, "order": "desc",
                               "orderBy": "1", "customLabel": "Rule"}},
+                  {"id": "7", "enabled": True, "type": "terms", "schema": "bucket",
+                   "params": {"field": "rule.mitre.id", "size": 3, "order": "desc",
+                              "orderBy": "1", "customLabel": "MITRE"}},
               ]},
              IDX_ALERTS, query="rule.level >= 7")
 
-    # Top MITRE Techniques (new — user request)
-    save_viz("soc-top-mitre", "SOC - Top MITRE Techniques (Last 4h)",
+    # ── Row 3: Attack Chain Candidates (host with multiple techniques) ──
+    save_viz("soc-attack-chains",
+             "SOC - Attack Chain Candidates (Host + Distinct MITRE)",
              {"type": "table",
               "params": {"perPage": 10, "showPartialRows": True,
                           "showMetricsAtAllLevels": True, "showTotal": False,
                           "totalFunc": "sum"},
               "aggs": [
-                  {"id": "1", "enabled": True, "type": "count", "schema": "metric",
-                   "params": {"customLabel": "Alerts"}},
+                  {"id": "1", "enabled": True, "type": "cardinality", "schema": "metric",
+                   "params": {"field": "rule.mitre.id",
+                              "customLabel": "Distinct Techniques"}},
                   {"id": "2", "enabled": True, "type": "cardinality", "schema": "metric",
-                   "params": {"field": "agent.name", "customLabel": "Agents"}},
-                  {"id": "3", "enabled": True, "type": "terms", "schema": "bucket",
-                   "params": {"field": "rule.mitre.id", "size": 10, "order": "desc",
-                              "orderBy": "1", "customLabel": "MITRE Technique"}},
+                   "params": {"field": "rule.mitre.tactic",
+                              "customLabel": "Distinct Tactics"}},
+                  {"id": "3", "enabled": True, "type": "count", "schema": "metric",
+                   "params": {"customLabel": "Total Alerts"}},
                   {"id": "4", "enabled": True, "type": "terms", "schema": "bucket",
-                   "params": {"field": "rule.mitre.tactic", "size": 5, "order": "desc",
-                              "orderBy": "1", "customLabel": "Tactic"}},
+                   "params": {"field": "agent.name", "size": 10, "order": "desc",
+                              "orderBy": "1", "customLabel": "Host"}},
               ]},
+             IDX_ALERTS, query="rule.level >= 7")
+
+    # ── Row 4: Top MITRE Tactic (attacker stage) ──
+    save_viz("soc-top-tactic", "SOC - Top MITRE Tactics (Last 4h)",
+             m_bar("rule.mitre.tactic", size=10),
              IDX_ALERTS, query="rule.level >= 5")
 
-    # Rule Activity Trend — split by rule.description (readable) instead of rule.id
-    save_viz("soc-rule-activity-4h", "SOC - Rule Activity Trend (Last 4h)",
+    # Rule Activity Trend — split by rule.description
+    save_viz("soc-rule-activity-4h",
+             "SOC - Rule Activity Trend (Last 4h, by Rule Description)",
              m_bar("@timestamp", split_field="rule.description", is_date_hist=True,
                    interval="10m"),
              IDX_ALERTS, query="rule.level >= 5")
 
+    # ── Row 5: Enrichment IOC malicious (link ready) ──
+    save_viz("soc-malicious-ioc-table",
+             "SOC - Malicious IOC Watchlist (Last 24h)",
+             m_table([
+                 {"params": {"field": "ioc_value", "size": 20, "order": "desc",
+                             "orderBy": "1", "customLabel": "IOC"}},
+                 {"params": {"field": "ioc_type", "size": 5, "order": "desc",
+                             "orderBy": "1", "customLabel": "Type"}},
+                 {"params": {"field": "provider", "size": 3, "order": "desc",
+                             "orderBy": "1", "customLabel": "Provider"}},
+                 {"params": {"field": "score", "size": 5, "order": "desc",
+                             "orderBy": "1", "customLabel": "Score"}},
+             ]),
+             IDX_VERDICTS, query='verdict_label : "malicious"')
+
+    # ── Row 6: Endpoint Heartbeat ──
     save_viz("soc-endpoint-heartbeat", "SOC - Endpoint Heartbeat Status",
              {"type": "table",
               "params": {"perPage": 20, "showPartialRows": True,
@@ -454,38 +503,66 @@ def build_dashboards():
     print("\n=== DASHBOARDS ===")
 
     # ---- SOC L1 ----
-    soc_md = """## SOC L1 Alert Triage Console
+    soc_header_md = """## 🚨 SOC L1 Alert Triage Console
+**Time**: Last 4 hours · **Auto-refresh**: 30s · **Persona**: L1 analyst on shift
 
-**Persona**: L1 analyst online shift. Auto-refresh 30s. Time frame Last 4 hours.
-
-**Workflow**: 4 KPI trên → nếu Critical > 0 → scroll xuống Triage Queue → chọn alert level cao nhất → escalate.
-
-Cần deep-dive 1 alert? → [DFIR Workbench](#/dashboards/view/btl-dfir)
+**Triage workflow** (Splunk ES-inspired):
+1. Row 1 KPIs → nếu **Critical > 0** hoặc **Aging > 0** = ưu tiên ngay
+2. Row 2 Notable Events → chọn row có **Max Level ≥ 12** hoặc **First seen > 30 min ago** (SLA breach)
+3. Row 3 Attack Chain → host với **Distinct Techniques ≥ 3** = likely compromise chain, ESCALATE L2
+4. Row 5 IOC watchlist → block IP/hash malicious ngay
+5. Row 6 Endpoint Heartbeat → agent **last event > 1h ago** = check tampering
 """
+
+    soc_playbook_md = """### 📖 Runbook References per Technique
+
+| MITRE | Rule | Playbook |
+|---|---|---|
+| T1059.001 PowerShell | 100101 | [session-01 report](https://github.com/gnid31/blue-team-lab/blob/main/hunting-reports/session-01-T1059.001.md) — decode base64, kill parent |
+| T1547.001 Run Key | 100108 | [session-02](https://github.com/gnid31/blue-team-lab/blob/main/hunting-reports/session-02-T1547.001.md) — `reg query HKU\\<SID>\\...\\Run`, backup hive |
+| T1053.005 Scheduled Task | 100104 | [session-03](https://github.com/gnid31/blue-team-lab/blob/main/hunting-reports/session-03-T1053.005.md) — `schtasks /query /xml`, decode taskContent |
+| T1087.001 Discovery | 100105/100115 | [session-04](https://github.com/gnid31/blue-team-lab/blob/main/hunting-reports/session-04-T1087.001.md) — correlate với other techniques |
+| T1003.008 Shadow read | 100100/100120 | [session-05](https://github.com/gnid31/blue-team-lab/blob/main/hunting-reports/session-05-T1003.008.md) — **rotate ALL passwords** |
+| T1543.003 Service Create | 100102/100112 | [session-06](https://github.com/gnid31/blue-team-lab/blob/main/hunting-reports/session-06-T1543.003.md) — check LOLBIN binary |
+| T1021.002 SMB Lateral | 100103/100106 | [session-07](https://github.com/gnid31/blue-team-lab/blob/main/hunting-reports/session-07-T1021.002-T1550.002.md) — block SMB port 445 |
+| T1562.001 Disable Defender | 100107 | [session-08](https://github.com/gnid31/blue-team-lab/blob/main/hunting-reports/session-08-T1562.001.md) — re-enable, scan full |
+| T1074.001 Data Staging | 100109/100119 | [session-09](https://github.com/gnid31/blue-team-lab/blob/main/hunting-reports/session-09-T1074.001.md) — sensor gap (WIP) |
+
+**Escalation**: cần deep-dive → [DFIR Workbench](#/dashboards/view/btl-dfir)
+"""
+
     save_dashboard("btl-soc-l1", "Blue Team Lab - SOC L1 Alert Triage Console",
                    panel_refs=[
-                       # Row 1: 4 KPI panels
-                       ("visualization", "soc-alert-volume-15m",
-                        {"x": 0, "y": 0, "w": 12, "h": 8}),
-                       ("visualization", "soc-critical-unack-15m",
-                        {"x": 12, "y": 0, "w": 12, "h": 8}),
-                       ("visualization", "soc-active-endpoints",
-                        {"x": 24, "y": 0, "w": 12, "h": 8}),
-                       ("visualization", "soc-top-firing-rule",
-                        {"x": 36, "y": 0, "w": 12, "h": 8}),
-                       # Row 2: Triage Queue (aggregated) — main workspace
-                       ("visualization", "soc-triage-queue",
-                        {"x": 0, "y": 8, "w": 48, "h": 18}),
-                       # Row 3: Top MITRE + Rule Activity
-                       ("visualization", "soc-top-mitre",
-                        {"x": 0, "y": 26, "w": 24, "h": 14}),
+                       # Row 1: 4 SLA KPI panels (y 6-14)
+                       ("visualization", "soc-kpi-critical",
+                        {"x": 0, "y": 6, "w": 12, "h": 8}),
+                       ("visualization", "soc-kpi-aging",
+                        {"x": 12, "y": 6, "w": 12, "h": 8}),
+                       ("visualization", "soc-kpi-chains",
+                        {"x": 24, "y": 6, "w": 12, "h": 8}),
+                       ("visualization", "soc-kpi-malicious-ioc",
+                        {"x": 36, "y": 6, "w": 12, "h": 8}),
+                       # Row 2: Notable Events (case-ready) — main workspace
+                       ("visualization", "soc-notable-events",
+                        {"x": 0, "y": 14, "w": 48, "h": 18}),
+                       # Row 3: Attack Chain Candidates + Top Tactics
+                       ("visualization", "soc-attack-chains",
+                        {"x": 0, "y": 32, "w": 24, "h": 14}),
+                       ("visualization", "soc-top-tactic",
+                        {"x": 24, "y": 32, "w": 24, "h": 14}),
+                       # Row 4: Rule Activity Trend (readable)
                        ("visualization", "soc-rule-activity-4h",
-                        {"x": 24, "y": 26, "w": 24, "h": 14}),
-                       # Row 4: Endpoint Heartbeat
+                        {"x": 0, "y": 46, "w": 48, "h": 14}),
+                       # Row 5: IOC watchlist + Endpoint heartbeat
+                       ("visualization", "soc-malicious-ioc-table",
+                        {"x": 0, "y": 60, "w": 24, "h": 14}),
                        ("visualization", "soc-endpoint-heartbeat",
-                        {"x": 0, "y": 40, "w": 48, "h": 12}),
+                        {"x": 24, "y": 60, "w": 24, "h": 14}),
                    ],
-                   markdown_panels=[(soc_md, {"x": 0, "y": 52, "w": 48, "h": 6})],
+                   markdown_panels=[
+                       (soc_header_md, {"x": 0, "y": 0, "w": 48, "h": 6}),
+                       (soc_playbook_md, {"x": 0, "y": 74, "w": 48, "h": 16}),
+                   ],
                    time_from="now-4h", time_to="now",
                    refresh_pause=False, refresh_value=30000)
 
