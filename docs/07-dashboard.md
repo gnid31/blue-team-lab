@@ -1,345 +1,474 @@
-# Phase 7 — Custom Dashboard (Wazuh Dashboard GUI)
+# Phase 7 — Custom Dashboards (Wazuh Dashboard GUI)
 
-> Hướng dẫn build custom dashboard cho dự án blue-team-lab. **Ưu tiên GUI**; CLI ở section 5 để tham khảo.
+> **3 dashboard persona-based**. Ưu tiên GUI; CLI section 8.
 
 ---
 
-## 0. Kiến thức nền
+## 0. Kiến thức nền + design principles
 
-### 0.1. Wazuh Dashboard là gì?
+### 0.1. Wazuh Dashboard = OpenSearch Dashboards fork
 
-**Wazuh Dashboard** = fork của **OpenSearch Dashboards** (bản thân là fork của **Kibana**). Đã cài sẵn ở Phase 1. Truy cập: `https://43.228.215.234` (login `admin`).
+Đã cài Phase 1 tại `https://43.228.215.234`. 3 menu quan trọng:
 
-3 tab quan trọng cho phase này (icon 3 gạch → menu):
-
-| Menu path | Mục đích |
+| Menu | Mục đích |
 |---|---|
-| **Dashboard management → Index patterns** | Định nghĩa "chỗ để đọc data" — pattern như `wazuh-alerts-*` |
-| **Visualize** | Vẽ 1 chart/table từ index pattern |
-| **Dashboard** | Gom nhiều visualization vào 1 trang |
+| **Dashboard management → Index patterns** | Định nghĩa nguồn data (`wazuh-alerts-*`, `enrichment-verdicts-*`) |
+| **Visualize** | Vẽ 1 chart |
+| **Dashboard** | Gom nhiều chart |
 
-### 0.2. Data ta có
+### 0.2. Nguyên tắc thiết kế dashboard
 
-| Index pattern | Nguồn | Field chính |
+Trước khi build, nắm 7 nguyên tắc — quyết định 1 dashboard tốt hay tệ.
+
+**1. Audience-first** — không có "1 dashboard cho tất cả". Persona quyết định:
+
+| Persona | Cần gì | Time-context |
 |---|---|---|
-| `wazuh-alerts-*` | Wazuh Manager alerts (auto-created) | `agent.name`, `rule.id`, `rule.level`, `rule.mitre.id`, `data.win.eventdata.*`, `data.audit.*` |
-| `enrichment-verdicts-*` | Custom (Phase 5b) | `ioc_value`, `provider`, `verdict_label`, `score`, `alert_id` |
+| L1 SOC Analyst | Alert queue + triage | Real-time (last 15 min) |
+| Threat Hunter / Detection Engineer | Rule performance + hunt data | Historical (24h - 7d) |
+| SOC Manager | KPIs, coverage, SLA | Weekly/monthly |
+| CISO / Exec | Risk posture, top threat | Monthly |
 
-Verify 2 index pattern có sẵn: Menu → Dashboard management → Index patterns → phải thấy cả 2 dòng. Nếu thiếu `enrichment-verdicts` xem `docs/05b-enrichment-writeback.md` §4.
+**Dự án này** = threat hunter + detection engineer + demo cho recruiter → **KHÔNG** phải L1 real-time alert queue.
 
-### 0.3. Mục tiêu
+**2. 5-second rule** — user nhìn 5s phải hiểu ngay tình hình + action gì cần làm.
 
-Build **6 visualization** + **1 dashboard tổng hợp** phản ánh mọi giá trị Phase 1-6:
+**3. Actionable > descriptive** — mỗi viz trả lời "vì cái này tôi làm gì?":
+- ❌ "Alert count by level" — biết để làm gì?
+- ✅ "5 critical unacknowledged >15 min" — call to action
 
-| # | Visualization | Type | Data source | Kể chuyện gì |
-|---|---|---|---|---|
-| 1 | MITRE Technique Coverage | Data Table | wazuh-alerts | 10 technique nào ta phát hiện, count mỗi cái |
-| 2 | Custom Rule Fires (100100-100120) | Vertical bar | wazuh-alerts | Rule nào bắn nhiều, rule nào chưa bao giờ bắn |
-| 3 | Enrichment Verdict Distribution | Donut/Pie | enrichment-verdicts | Ratio malicious / suspicious / clean |
-| 4 | Top IOCs Enriched | Data Table | enrichment-verdicts | IOC nào nhiều alert nhất |
-| 5 | Alerts by Agent (Timeline) | Line | wazuh-alerts | Trend theo thời gian, split by agent |
-| 6 | Alerts by Rule Level | Vertical bar | wazuh-alerts | Distribution severity |
+**4. Information hierarchy (F-pattern)** — top-left = quan trọng nhất; right & bottom = detail.
 
----
+**5. Data-ink ratio (Tufte)** — maximize data pixels, minimize chartjunk. Không 3D, không background gradient.
 
-## 1. Build từng Visualization (GUI)
+**6. Baseline / threshold** — trending up có tốt/xấu? Cần reference line hoặc SLA target, không show con số trần.
 
-### 1.1. Visualization 1 — MITRE Technique Coverage
+**7. Time-boxed context** — mỗi dashboard 1 time frame rõ ràng, không lộn xộn.
 
-**Mục tiêu**: bảng liệt kê technique MITRE nào detect được, kèm alert count.
+### 0.3. Standards / frameworks tham chiếu
 
-**GUI steps**:
+Không có ISO/NIST standard riêng cho SOC dashboard, nhưng các reference:
 
-1. Menu → **Visualize** → **Create visualization** (góc phải)
-2. Chọn type: **Data table**
-3. Chọn index pattern: **`wazuh-alerts-*`**
-4. Ở panel bên phải:
-   - **Metrics** → **Count** (mặc định giữ nguyên)
-   - Click **Add** → **Buckets** → **Split rows**
-     - Aggregation: **Terms**
-     - Field: **`rule.mitre.id`**
-     - Order by: **metric: Count**
-     - Order: **Descending**
-     - Size: **20**
-     - Custom label: **MITRE Technique**
-5. Click nút **▶ Update** (góc dưới)
-6. Kết quả: bảng 2 cột (Technique | Count) — ví dụ:
-   ```
-   T1547.001    1
-   T1053.005    1
-   T1059.001    2
-   T1550.002    1
-   ...
-   ```
-7. Menu → **Save** → Title: **`BTL - MITRE Technique Coverage`** → Save
-
-### 1.2. Visualization 2 — Custom Rule Fires
-
-**Mục tiêu**: bar chart chỉ 10 custom rule.
-
-**GUI steps**:
-
-1. **Visualize** → Create → **Vertical Bar**
-2. Index pattern: **`wazuh-alerts-*`**
-3. **Metrics** → **Y-axis** → Count
-4. **Buckets** → **X-axis**:
-   - Aggregation: **Terms**
-   - Field: **`rule.id`**
-   - Size: **15**
-   - Custom label: **Custom Rule ID**
-5. Add filter ngay dưới thanh search (góc trên) — **Add filter**:
-   - Field: `rule.id`
-   - Operator: **is one of**
-   - Values (paste từng cái, tab để tách): `100100, 100101, 100102, 100104, 100105, 100106, 100107, 100108, 100109, 100112, 100115, 100119, 100120`
-   - Save filter
-6. Update. Kết quả: cột đứng, mỗi cột 1 rule ID.
-7. Save: title **`BTL - Custom Rule Fires (100100-100120)`**
-
-> **Ghi chú**: rule ID 100103 (T1021.002) không fire riêng vì bị dedup bởi 100106 (level 14) — normal behavior, xem session 07 report.
-
-### 1.3. Visualization 3 — Enrichment Verdict Distribution
-
-**Mục tiêu**: pie/donut chart tỷ lệ verdict.
-
-**GUI steps**:
-
-1. **Visualize** → Create → **Pie**
-2. Index pattern: **`enrichment-verdicts-*`** ← khác với ở trên!
-3. **Metrics** → **Slice size** → Count
-4. **Buckets** → **Split slices**:
-   - Aggregation: **Terms**
-   - Field: **`verdict_label`**
-   - Size: **5**
-   - Custom label: **Verdict**
-5. Options tab (bên phải trên) → **Donut**: toggle ON (để có lỗ giữa cho đẹp)
-6. Update. Kết quả: 4 màu ứng với `malicious / suspicious / clean / unknown`.
-7. Save: **`BTL - Enrichment Verdict Distribution`**
-
-### 1.4. Visualization 4 — Top IOCs Enriched
-
-**Mục tiêu**: bảng top IOC bị flag nhiều nhất.
-
-**GUI steps**:
-
-1. **Visualize** → Create → **Data table**
-2. Index pattern: **`enrichment-verdicts-*`**
-3. **Metrics** → Count
-4. **Buckets** → **Split rows** (thêm **3 buckets liên tiếp**):
-   - Bucket 1: Terms — Field `ioc_value` — Size 15 — Custom label **IOC Value**
-   - Bucket 2 (click Add → Sub-buckets? Actually just Add Split rows): Terms — Field `provider` — Size 3 — Custom label **Provider**
-   - Bucket 3: Terms — Field `verdict_label` — Size 4 — Custom label **Verdict**
-5. Update. Kết quả: bảng 4 cột (IOC, Provider, Verdict, Count).
-6. Save: **`BTL - Top IOCs Enriched`**
-
-### 1.5. Visualization 5 — Alerts by Agent (Timeline)
-
-**Mục tiêu**: line chart theo thời gian, mỗi agent 1 line.
-
-**GUI steps**:
-
-1. **Visualize** → Create → **Line**
-2. Index pattern: **`wazuh-alerts-*`**
-3. **Metrics** → **Y-axis** → Count
-4. **Buckets** → **X-axis**:
-   - Aggregation: **Date Histogram**
-   - Field: **@timestamp**
-   - Minimum interval: **Auto**
-5. **Add sub-buckets** → **Split series**:
-   - Sub aggregation: **Terms**
-   - Field: **`agent.name`**
-   - Size: **5**
-   - Custom label: **Agent**
-6. Time picker (góc phải trên): **Last 24 hours**
-7. Update. Kết quả: đường timeline, mỗi màu 1 agent (vps, win-ep-01, linux-ep-01).
-8. Save: **`BTL - Alerts by Agent (Timeline)`**
-
-### 1.6. Visualization 6 — Alerts by Rule Level
-
-**Mục tiêu**: bar histogram severity distribution.
-
-**GUI steps**:
-
-1. **Visualize** → Create → **Vertical Bar**
-2. Index pattern: **`wazuh-alerts-*`**
-3. **Metrics** → **Y-axis** → Count
-4. **Buckets** → **X-axis**:
-   - Aggregation: **Terms**
-   - Field: **`rule.level`**
-   - Order by: **Alphabetical** (để 0→15 theo thứ tự level)
-   - Order: **Ascending**
-   - Size: **16**
-   - Custom label: **Rule Level**
-5. Update. Kết quả: bar theo level 3, 5, 7, 8, 10, 12, 14, 15.
-6. Save: **`BTL - Alerts by Rule Level`**
+| Framework | Lĩnh vực | Dùng gì cho dự án này |
+|---|---|---|
+| **Stephen Few** — "Information Dashboard Design" | Sách kinh điển | 13 lỗi thường gặp; layout principles |
+| **Edward Tufte** — "Visual Display of Quantitative Info" | Sách kinh điển | Data-ink ratio, sparkline |
+| **Google SRE — 4 Golden Signals** | Ops monitoring | Rate/Errors/Duration/Saturation áp cho SOC = Alerts/hour / FP rate / MTTD / Analyst workload |
+| **SOC-CMM** (Rob van Os) | SOC maturity model | Domain metrics list dashboard-able |
+| **MITRE ATT&CK Navigator** | Detection coverage | Heatmap technique coverage |
+| **NIST CSF Detect function** | Framework governance | Category DE.CM (Continuous Monitoring) metrics |
 
 ---
 
-## 2. Assemble Dashboard (GUI)
+## 1. 3 Dashboard tách biệt theo persona
 
-Đến đây có 6 saved visualization. Gom vào 1 dashboard:
+### 1.1. Overview
 
-1. Menu → **Dashboard** → **Create dashboard**
-2. Click **Add** (góc trên, cạnh Save)
-3. Panel bên phải hiện danh sách visualization đã save → check 6 cái **BTL - ***
-4. Đóng panel Add — 6 visualization đã append vào dashboard
-5. **Kéo thả để sắp xếp** theo layout đề xuất:
+| Dashboard | Persona | Time frame | Audience question trả lời |
+|---|---|---|---|
+| **A. Detection Engineering** | Detection engineer / threat hunter | Last 7 days | "Rule của tôi có hoạt động không? Đang miss technique nào?" |
+| **B. Hunt Support** | Threat hunter khi trong session | Last 24 hours | "Attack đang xảy ra? IOC nào cần block? Correlation gì có sẵn?" |
+| **C. Lab Health / Executive** | Recruiter, interviewer, CISO | Last 7 days | "Dự án này produce gì? Coverage rộng không? Nghiêm túc không?" |
 
-   ```
-   ┌─────────────────────────┬─────────────────────────┐
-   │ MITRE Technique Coverage│ Custom Rule Fires       │
-   │ (top-left, 50% width)   │ (top-right, 50% width)  │
-   ├─────────────────────────┼─────────────────────────┤
-   │ Verdict Distribution    │ Top IOCs Enriched       │
-   │ (33% width)             │ (67% width, wider)      │
-   ├─────────────────────────┴─────────────────────────┤
-   │ Alerts by Agent Timeline (full width, thấp)       │
-   ├─────────────────────────┬─────────────────────────┤
-   │ Alerts by Rule Level    │ (empty — có thể add Markdown text) │
-   └─────────────────────────┴─────────────────────────┘
-   ```
+### 1.2. Data source & metrics
 
-6. **Time picker**: set **Last 24 hours** (hoặc **Last 7 days** nếu muốn xem trend rộng)
-7. **Refresh**: 30 seconds (nếu muốn auto refresh)
-8. Click **Save** (góc trên phải):
-   - Title: **`Blue Team Lab — SOC Overview`**
-   - Description: `Custom dashboard: MITRE coverage, custom rule fires, enrichment verdicts, IOC ranking, agent timeline, rule level distribution.`
-   - **Store time with dashboard**: ✅ (giữ time picker Last 24h)
-   - Save
-
-Xong. Dashboard giờ có URL cố định: menu → Dashboard → **Blue Team Lab — SOC Overview**.
+| Metric | Source | Dùng ở dashboard |
+|---|---|---|
+| `rule.mitre.id` | wazuh-alerts-* | A, C |
+| `rule.id` (custom range 100100-100120) | wazuh-alerts-* | A |
+| `rule.level` | wazuh-alerts-* | A, C |
+| `agent.name` | wazuh-alerts-* | B, C |
+| `data.win.eventdata.*` / `data.audit.*` | wazuh-alerts-* | B (drill-down) |
+| `verdict_label`, `ioc_value`, `provider` | enrichment-verdicts-* | B, C |
+| `@timestamp` | both | A, B, C |
 
 ---
 
-## 3. Add Markdown widget (optional — sáng tạo thêm)
+## 2. Dashboard A — Detection Engineering
 
-Thêm text block giới thiệu dashboard:
+**Persona**: người viết rule, muốn biết rule có hoạt động và có gap gì.
 
-1. Trong dashboard đang edit → **Add** → tab **Markdown**
-2. Nội dung:
-   ```markdown
-   # Blue Team Lab — SOC Overview
-   
-   **Project**: Wazuh 4.9 HIDS + 10 MITRE ATT&CK detection rules + Python IOC enrichment
-   
-   **Data sources**:
-   - `wazuh-alerts-*` — Sysmon + auditd + Windows Security
-   - `enrichment-verdicts-*` — VirusTotal + AbuseIPDB verdict
-   
-   **Custom rules**: 100100 – 100120 (T1003.008, T1021.002, T1053.005, T1059.001, T1074.001, T1087.001, T1543.003, T1547.001, T1550.002, T1562.001)
-   
-   **Docs**: [github.com/gnid31/blue-team-lab](https://github.com/gnid31/blue-team-lab)
-   ```
-3. Save panel. Kéo vào góc trên đầu dashboard.
-
----
-
-## 4. Export dashboard (backup + share)
-
-Sau khi build xong, export sang file `.ndjson` để commit vào repo:
-
-**GUI**:
-
-1. Menu → **Stack Management** (hoặc "Dashboard management") → **Saved objects**
-2. Click **Export** (góc phải)
-3. Check các item:
-   - Index patterns: `wazuh-alerts-*`, `enrichment-verdicts-*`
-   - Visualizations: 6 cái **BTL - ***
-   - Dashboards: **Blue Team Lab — SOC Overview**
-4. Bật toggle **Include related objects** (để tự động include references)
-5. Click **Export** → download file `export.ndjson`
-6. Rename → `dashboard/blue-team-lab.ndjson`
-7. Copy vào repo:
-   ```bash
-   scp namth@43.228.215.234:~/export.ndjson dashboard/blue-team-lab.ndjson
-   git add dashboard/blue-team-lab.ndjson
-   git commit -m "dashboard: export saved objects (6 viz + 1 dashboard)"
-   ```
-
----
-
-## 5. CLI equivalent (reference)
-
-Nếu muốn scripted rebuild sau này, gọi Saved Objects API trên port 443:
-
-```bash
-# Import từ ndjson (upload)
-curl -sk -u "admin:$PASS" -H "osd-xsrf: true" \
-  -F "file=@dashboard/blue-team-lab.ndjson" \
-  "https://43.228.215.234/api/saved_objects/_import?overwrite=true"
-
-# Export bulk
-curl -sk -u "admin:$PASS" -H "osd-xsrf: true" -H "Content-Type: application/json" \
-  -X POST "https://43.228.215.234/api/saved_objects/_export" \
-  -d '{"type":["visualization","dashboard","index-pattern"],"includeReferencesDeep":true}' \
-  > dashboard/blue-team-lab.ndjson
-
-# Delete 1 object (nếu cần rebuild)
-curl -sk -u "admin:$PASS" -H "osd-xsrf: true" \
-  -X DELETE "https://43.228.215.234/api/saved_objects/visualization/btl-viz-mitre"
+**Layout**:
+```
+┌──────────────────────────────┬──────────────────────────────┐
+│ A1. Custom Rule Performance  │ A2. MITRE ATT&CK Coverage    │
+│ (data table)                 │ (heatmap or matrix table)    │
+├──────────────────────────────┴──────────────────────────────┤
+│ A3. Custom Rule Fires Timeline (multi-line 100100-100120)   │
+├──────────────────────────────┬──────────────────────────────┤
+│ A4. Coverage Gap             │ A5. Rule Level Distribution  │
+│ (table: built-in fires but   │ (bar histogram)              │
+│  no custom rule for same TT) │                              │
+└──────────────────────────────┴──────────────────────────────┘
 ```
 
-Docs API: https://opensearch.org/docs/latest/dashboards/management/saved-objects/
+### A1 — Custom Rule Performance (table)
 
----
-
-## 6. Screenshot cho CV / README
-
-Sau khi dashboard hoạt động, **screenshot** để nhúng vào CV / GitHub README:
+**Question**: rule nào fire, rule nào chưa bao giờ, last fire khi nào?
 
 **GUI**:
 
-1. Time picker → **Last 24 hours** (để có data đầy đủ)
-2. Chrome/Firefox → **F11** full-screen
-3. **Print Screen** hoặc `Shift+PrintScreen` chọn window
-4. Save vào `dashboard/screenshots/overview.png`
+1. Visualize → Create → **Data table**
+2. Index pattern: `wazuh-alerts-*`
+3. Time picker: **Last 7 days**
+4. Buckets → **Split rows**:
+   - Terms — field `rule.id` — size 20 — Custom label "Rule ID"
+5. Add sub-metric (top-right corner "+" trong metric panel):
+   - **Max** → field `@timestamp` → Custom label "Last fire"
+6. Add filter: `rule.id : (100100 or 100101 or 100102 or 100104 or 100105 or 100106 or 100107 or 100108 or 100109 or 100112 or 100115 or 100119 or 100120)`
+7. Save: **`BTL-A1 Custom Rule Performance`**
 
-**Recommend** capture các state:
-- `overview.png` — full dashboard 24h view
-- `mitre-close.png` — zoom MITRE table
-- `verdict-pie.png` — verdict distribution với legend
-- `timeline.png` — agent timeline
+### A2 — MITRE ATT&CK Coverage (heatmap)
 
-Reference trong README:
+**Question**: technique nào cover, count bao nhiêu?
+
+**GUI**:
+
+1. Visualize → Create → **Heat map** (nếu không có, dùng Data table)
+2. Index pattern: `wazuh-alerts-*`
+3. Metrics → Value: Count
+4. Buckets → **Y-axis**: Terms — field `rule.mitre.tactic` — size 12
+5. Buckets → **X-axis**: Terms — field `rule.mitre.id` — size 30
+6. Save: **`BTL-A2 MITRE ATT&CK Coverage`**
+
+> **Trick nâng cao**: dùng Vega custom visualization để render đúng theo layout ATT&CK Navigator. Docs: https://opensearch.org/docs/latest/dashboards/visualize/vega/
+
+### A3 — Custom Rule Fires Timeline (multi-line)
+
+**Question**: rule nào có FP trend spike?
+
+**GUI**:
+
+1. Visualize → **Line**
+2. Index pattern: `wazuh-alerts-*`
+3. X-axis: Date Histogram — `@timestamp` — Auto
+4. Split series: Terms — `rule.id` — size 15 — apply same filter A1
+5. Save: **`BTL-A3 Custom Rule Fires Timeline`**
+
+### A4 — Coverage Gap (table)
+
+**Question**: technique nào có alert built-in Wazuh mà **không có** rule custom mapping?
+
+**GUI**:
+
+1. Visualize → **Data table**
+2. Index pattern: `wazuh-alerts-*`
+3. Buckets → Split rows: Terms — `rule.mitre.id` — size 30
+4. Filter: `rule.id < 100000` — chỉ built-in
+5. Sort desc by Count
+6. Save: **`BTL-A4 Coverage Gap (Built-in vs Custom)`**
+
+**Cách dùng**: so sánh với A2 — technique nào có trong A4 mà không có trong A2 = gap → cần viết rule custom mới.
+
+### A5 — Rule Level Distribution (bar)
+
+**Question**: tỷ lệ level severity của rule custom (kiểm tra không "level inflation")?
+
+**GUI**:
+
+1. Visualize → **Vertical Bar**
+2. Index pattern: `wazuh-alerts-*`
+3. X-axis: Terms — `rule.level` — order asc — size 16 — Custom label "Level"
+4. Filter: cùng filter A1 (chỉ custom rule)
+5. Save: **`BTL-A5 Rule Level Distribution`**
+
+### Assemble Dashboard A
+
+1. Dashboard → Create → Add → chọn 5 viz **BTL-A***
+2. Layout theo sơ đồ ở trên (kéo thả)
+3. Time picker: **Last 7 days**
+4. Save: **`Blue Team Lab — A. Detection Engineering`**
+
+---
+
+## 3. Dashboard B — Hunt Support
+
+**Persona**: threat hunter trong session, cần visibility real-time.
+
+**Layout**:
+```
+┌──────────────────────────────┬──────────────────────────────┐
+│ B1. Enrichment Verdict       │ B2. Top Malicious IOCs       │
+│ (donut, 24h)                 │ (data table with VT link)    │
+├──────────────────────────────┴──────────────────────────────┤
+│ B3. Alerts by Agent Timeline (multi-line, 24h)              │
+├──────────────────────────────┬──────────────────────────────┤
+│ B4. Top Users / Process      │ B5. Cross-agent Correlation  │
+│ (data table)                 │ (technique + multi-agent)    │
+└──────────────────────────────┴──────────────────────────────┘
+```
+
+### B1 — Enrichment Verdict (donut)
+
+**Question**: trong 24h enrichment vừa chạy, có bao nhiêu malicious?
+
+**GUI**:
+
+1. Visualize → **Pie**
+2. Index pattern: **`enrichment-verdicts-*`**
+3. Slice size: Count
+4. Split slices: Terms — `verdict_label` — size 4
+5. Options → **Donut: ON**
+6. Time picker: Last 24h
+7. Save: **`BTL-B1 Enrichment Verdict`**
+
+### B2 — Top Malicious IOCs (table)
+
+**Question**: IOC nào cần block/investigate ngay?
+
+**GUI**:
+
+1. Visualize → **Data table**
+2. Index pattern: `enrichment-verdicts-*`
+3. Filter: `verdict_label : "malicious"` (chỉ malicious)
+4. Split rows:
+   - Bucket 1: Terms — `ioc_value` — size 20
+   - Bucket 2: Terms — `provider` — size 3
+   - Bucket 3: Terms — `link` — size 1 (để hiển thị link)
+   - Bucket 4: Max — `score` (nếu là numeric)
+5. Save: **`BTL-B2 Top Malicious IOCs`**
+
+**Trick clickable link**: OpenSearch Dashboards **field format** — Index patterns → enrichment-verdicts → field `link` → set format = **Url** → template `{{value}}`. Sau đó bảng sẽ render link click được.
+
+### B3 — Alerts by Agent Timeline (line)
+
+**Question**: agent nào bùng phát alert?
+
+**GUI**:
+
+1. Visualize → **Line**
+2. Index pattern: `wazuh-alerts-*`
+3. X-axis: Date Histogram — `@timestamp` — 30 min
+4. Split series: Terms — `agent.name` — size 5
+5. Filter: `rule.level >= 7` (chỉ alert đáng chú ý)
+6. Time picker: Last 24h
+7. Save: **`BTL-B3 Alerts by Agent`**
+
+### B4 — Top Users / Processes (table)
+
+**Question**: user/process nào có nhiều alert nhất → suspicious behavior candidate?
+
+**GUI**:
+
+1. Visualize → **Data table**
+2. Index pattern: `wazuh-alerts-*`
+3. Split rows:
+   - Bucket 1: Terms — `data.win.eventdata.user` — size 10
+   - Bucket 2: Terms — `data.win.eventdata.image` — size 3
+4. Sort desc Count
+5. Save: **`BTL-B4 Top Users & Processes`**
+
+### B5 — Cross-agent Correlation
+
+**Question**: cùng technique fire trên nhiều agent = attack chain?
+
+**GUI**:
+
+1. Visualize → **Data table**
+2. Index pattern: `wazuh-alerts-*`
+3. Split rows:
+   - Bucket 1: Terms — `rule.mitre.id` — size 10
+   - Bucket 2: Cardinality — `agent.name` (count unique agents)
+4. Filter: `rule.level >= 7`
+5. Sort desc by cardinality → technique có unique agents ≥ 2 = correlation signal
+6. Save: **`BTL-B5 Cross-agent Correlation`**
+
+### Assemble Dashboard B
+
+1. Dashboard → Create → Add → 5 viz **BTL-B***
+2. Time picker: **Last 24 hours**
+3. Auto-refresh: **30 seconds** (real-time feel)
+4. Save: **`Blue Team Lab — B. Hunt Support`**
+
+---
+
+## 4. Dashboard C — Lab Health / Executive
+
+**Persona**: recruiter, interviewer, CISO. Cần "5-second story".
+
+**Layout**:
+```
+┌─────┬─────┬─────┬─────┐  ← 4 big number panels (top row)
+│ 4K  │ 10  │  3  │ 87% │
+│Alert│Tech │Agent│Cover│
+└─────┴─────┴─────┴─────┘
+┌──────────────────────────────────────────────────────────────┐
+│ C5. MITRE ATT&CK Coverage Heatmap (full width)              │
+├──────────────────────────────┬───────────────────────────────┤
+│ C6. Timeline last 7d         │ C7. Verdict Distribution      │
+│ (line)                       │ (donut)                       │
+└──────────────────────────────┴───────────────────────────────┘
+```
+
+### C1-C4 — Big Number Panels
+
+**Question**: 5s snapshot.
+
+**GUI cho C1 (Total alerts)**:
+
+1. Visualize → **Metric**
+2. Index pattern: `wazuh-alerts-*`
+3. Metric: Count
+4. Options → **Show title**: OFF (chỉ số)
+5. Font size: 60 (lớn)
+6. Time picker: Last 7 days
+7. Save: **`BTL-C1 Total Alerts`**
+
+**C2 — Unique techniques**:
+1. Metric type → **Unique Count** (cardinality)
+2. Field: `rule.mitre.id`
+3. Save: **`BTL-C2 Techniques Detected`**
+
+**C3 — Unique agents monitored**:
+1. Metric type → **Unique Count**
+2. Field: `agent.name`
+3. Save: **`BTL-C3 Agents Monitored`**
+
+**C4 — Enrichment coverage %**:
+- Complex — cần **Percentile aggregation** hoặc dùng TSVB (Time Series Visual Builder)
+- Simplified: chỉ show enrichment total count (từ enrichment-verdicts-*)
+- Save: **`BTL-C4 Enrichment Verdicts Written`**
+
+### C5 — MITRE ATT&CK Coverage Heatmap
+
+Reuse **BTL-A2** hoặc build lại với Vega custom cho layout ATT&CK Navigator-style.
+
+### C6 — Alerts Timeline 7d
+
+Reuse **BTL-A3** hoặc simplified single-line (total count không split).
+
+### C7 — Verdict Distribution 7d
+
+Same as **BTL-B1** nhưng time frame Last 7 days.
+
+### Assemble Dashboard C
+
+1. Dashboard → Create → Add
+2. Layout: 4 big numbers row top, MITRE heatmap giữa, 2 chart bottom
+3. **Markdown widget** cho intro:
+   ```markdown
+   # Blue Team Lab — Threat Detection Overview
+   
+   Wazuh 4.9 HIDS + 15 custom rules mapped MITRE ATT&CK + Python IOC enrichment (VirusTotal + AbuseIPDB)
+   
+   Repo: [github.com/gnid31/blue-team-lab](https://github.com/gnid31/blue-team-lab)
+   ```
+4. Time picker: **Last 7 days**
+5. Save: **`Blue Team Lab — C. Overview (Executive)`**
+
+---
+
+## 5. Navigation between dashboards
+
+Wazuh Dashboard cho phép link giữa dashboards qua **Markdown** widget hoặc **Dashboard-only mode**:
+
+Trong Dashboard C, thêm markdown block:
+```markdown
+🔍 **Drill down**:
+- [Detection Engineering →](#/dashboards/view/blue-team-lab-a)
+- [Hunt Support →](#/dashboards/view/blue-team-lab-b)
+```
+
+(URL slug tuỳ theo bạn đặt khi save)
+
+---
+
+## 6. Export cả 3 dashboards (backup)
+
+**GUI**:
+
+1. Menu → **Stack Management** → **Saved objects**
+2. Search bar: gõ `BTL-` — filter toàn bộ visualization + dashboard của lab
+3. Check all → **Export** (góc phải)
+4. Bật toggle **Include related objects**
+5. Download `export.ndjson`
+6. Rename → `dashboard/blue-team-lab-all.ndjson`
+7. Commit:
+   ```bash
+   scp namth@43.228.215.234:~/export.ndjson dashboard/blue-team-lab-all.ndjson
+   git add dashboard/blue-team-lab-all.ndjson
+   git commit -m "dashboard: export 3 persona dashboards (Detection Engineering + Hunt Support + Executive)"
+   ```
+
+---
+
+## 7. Screenshot cho CV / README
+
+Với 3 dashboards, screenshot theo priority:
+
+1. **Dashboard C** (Executive) — screenshot chính cho **README hero image** — trực quan nhất
+2. **Dashboard A** — screenshot cho phần "Detection Engineering" của CV
+3. **Dashboard B** — chỉ screenshot khi có session hunting đang chạy (data phong phú)
+
+Save:
+```
+dashboard/screenshots/
+├── C-executive-overview.png    ← hero image
+├── A-detection-engineering.png
+└── B-hunt-support.png
+```
+
+README embed:
 ```markdown
 ## Dashboard preview
 
-![SOC Overview](dashboard/screenshots/overview.png)
+![Executive Overview](dashboard/screenshots/C-executive-overview.png)
 ```
 
 ---
 
-## 7. Troubleshooting
+## 8. CLI equivalent (reference)
+
+```bash
+# Import từ ndjson
+curl -sk -u "admin:$PASS" -H "osd-xsrf: true" \
+  -F "file=@dashboard/blue-team-lab-all.ndjson" \
+  "https://43.228.215.234/api/saved_objects/_import?overwrite=true"
+
+# Export toàn bộ visualization + dashboard
+curl -sk -u "admin:$PASS" -H "osd-xsrf: true" -H "Content-Type: application/json" \
+  -X POST "https://43.228.215.234/api/saved_objects/_export" \
+  -d '{"type":["visualization","dashboard","index-pattern"],"includeReferencesDeep":true}' \
+  > dashboard/blue-team-lab-all.ndjson
+
+# Delete 1 dashboard để rebuild sạch
+curl -sk -u "admin:$PASS" -H "osd-xsrf: true" \
+  -X DELETE "https://43.228.215.234/api/saved_objects/dashboard/blue-team-lab-a"
+```
+
+API docs: https://opensearch.org/docs/latest/dashboards/management/saved-objects/
+
+---
+
+## 9. Troubleshooting
 
 | Triệu chứng | Nguyên nhân | Fix |
 |---|---|---|
-| Visualization "No results found" | Time picker sai — data ở ngoài range | Đổi Last 24h / Last 7 days |
-| MITRE technique bucket rỗng | `rule.mitre.id` chưa được index như keyword | Refresh index pattern (Index patterns → wazuh-alerts → refresh field list) |
-| Pie chart 100% "unknown" | Data cache cũ — chưa có enrichment mới | Chạy lại `python enrich.py --writeback` |
-| Filter `is one of` không apply | Wazuh Dashboard field type strict — thử `is` cho từng ID | Dùng KQL query trực tiếp: `rule.id : (100100 or 100101 or ...)` |
-| Dashboard load chậm | Time range quá rộng | Set Last 24h hoặc Last 7 days, tránh Last year |
+| Viz "No results found" | Time range sai | Đổi Last 24h / 7d |
+| `rule.mitre.id` bucket empty | Field chưa index như keyword | Menu → Index patterns → wazuh-alerts → Refresh field list |
+| Heatmap không load | Data quá spare (ít technique) | Cần thêm data — chạy thêm session hunt |
+| "Include related objects" export ra file rỗng | Không có object nào được select | Search "BTL-" trước, check all |
+| Field format URL không render link | Cần bật trong index pattern setting | Index patterns → enrichment-verdicts → field `link` → Edit → Format: Url |
 
 ---
 
-## 8. Ghi log
-
-Sau khi hoàn thành:
+## 10. Ghi log
 
 ```
 ## 2026-XX-XX HH:MM | human | kali+dashboard | phase7
-- what: build 6 BTL visualization + 1 dashboard "Blue Team Lab — SOC Overview" trong Wazuh Dashboard
-- result: ok — dashboard live tại /app/dashboards#/view/blue-team-lab-overview; exported .ndjson vào repo
-- next: screenshot cho CV
+- what: build 3 dashboards (A Detection Engineering, B Hunt Support, C Executive Overview) với ~13 visualization tổng
+- result: ok — 3 dashboards live, exported .ndjson, screenshots vào dashboard/screenshots/
+- next: embed screenshot vào README, PR review
 ```
 
 ---
 
-## 9. Đề xuất extension sau
+## 11. Đề xuất extension
 
-Nếu muốn cải tiến dashboard:
+Sau khi 3 dashboards work:
 
-1. **Alerts vs Enrichment join** — dùng OpenSearch join query (script hoặc Vega custom viz) để hiển thị **alert kèm verdict** trong 1 row
-2. **MITRE ATT&CK Navigator export** — dùng viz 1 làm data source, generate JSON theo format ATT&CK Navigator layer → import vào navigator.mitre.org
-3. **Auto-alert email** — cấu hình Wazuh Dashboard Alerting plugin để email khi rule level ≥ 14 fire
-4. **Vega custom visualization** — cho phép chart phức tạp hơn (Sankey flow của attack chain, force-directed IOC graph)
-
-Xem docs OpenSearch Dashboards: https://opensearch.org/docs/latest/dashboards/
+1. **MITRE ATT&CK Navigator export** — build 1 script Python đọc `wazuh-alerts-*` → output JSON theo format navigator.mitre.org
+2. **Vega custom viz** — thay heatmap default bằng custom D3-based cho A2/C5 (ATT&CK Navigator layout đúng chuẩn)
+3. **Alerting plugin** — cấu hình gửi email khi rule level ≥ 14 fire (OpenSearch Alerting)
+4. **Dashboard drill-down** — click vào 1 rule.id trong table → mở Discover với filter apply sẵn
+5. **Anomaly Detection plugin** — OpenSearch có sẵn ML plugin, có thể set anomaly detector trên alert count timeline
